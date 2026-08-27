@@ -23,10 +23,13 @@ if (bindElementsMatch) {
 }
 
 expect(/<script type="module" src="app\.js"><\/script>/.test(html), "index.html should load app.js as a module.");
-expect(app.includes("showRuleTests"), "app.js should keep the in-browser test runner hook.");
+expect(!html.includes('id="test-button"') && !app.includes("showRuleTests"), "The public student toolbar should not expose the developer test runner.");
 expect(app.includes("printCards"), "app.js should keep the print deck hook.");
 expect(app.includes("startTutorial"), "app.js should keep the tutorial hook.");
 expect(app.includes("renderSources"), "app.js should render source cards in the Rule Judge panel.");
+expect(app.includes("AUTHORITY_BY_ID"), "Rulings should resolve traceable authority IDs.");
+expect(app.includes("renderLearningCycle"), "The app should render committed predictions and revisions.");
+expect(app.includes("persistAutosave"), "The app should autosave reproducible sessions locally.");
 expect(app.includes("SCENARIO_PACKS"), "app.js should load validated classroom scenario packs.");
 expect(app.includes("seededShuffle"), "app.js should use seeded shuffles.");
 expect(!app.includes("Math.random"), "app.js should not use unseeded Math.random shuffles.");

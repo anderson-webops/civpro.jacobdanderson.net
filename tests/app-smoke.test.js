@@ -99,7 +99,7 @@ expect(elements.get("roles-value")?.textContent.includes("plaintiff"), "Initial 
 expect(elements.get("claim-hand")?.innerHTML.includes("playing-card"), "Initial render should draw claim cards.");
 expect(elements.get("attack-hand")?.innerHTML.includes("playing-card"), "Initial render should draw attack cards.");
 expect(elements.get("motion-hand")?.innerHTML.includes("playing-card"), "Initial render should draw motion cards.");
-expect(elements.get("source-list")?.innerHTML.includes("FRCP 4"), "Initial render should include generated source cards.");
+expect(elements.get("source-list")?.innerHTML.includes("No governing authority"), "Initial bench notes should not display unrelated authority cards.");
 expect(elements.get("judge-output")?.innerHTML.includes("Player 1 is plaintiff"), "Initial render should populate the Rule Judge.");
 expect(elements.get("scenario-summary")?.innerHTML.includes("Jurisdiction and Removal"), "Initial render should show the active scenario pack.");
 expect(elements.get("seed-input")?.value === "jurisdiction-removal-50-v1", "Initial render should expose the pack seed.");
@@ -111,7 +111,8 @@ elements.get("new-game-button")?.eventListeners.get("click")?.();
 expect(elements.get("claim-hand")?.innerHTML === firstClaimHand, "Starting again with the same seed should reproduce the claim hand.");
 
 elements.get("save-session-button")?.eventListeners.get("click")?.();
-expect(window.localStorage.getItem("civpro.v0.3.saved-session")?.includes('"appVersion":"0.3.0"'), "Save should write a Version 0.3 local snapshot.");
+expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"appVersion":"0.4.0"'), "Save should write a Version 0.4 local snapshot.");
+expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"contentVersion":"2026-08-27.1"'), "Save should identify the content version.");
 elements.get("seed-input").value = "changed-seed";
 elements.get("new-game-button")?.eventListeners.get("click")?.();
 elements.get("load-session-button")?.eventListeners.get("click")?.();

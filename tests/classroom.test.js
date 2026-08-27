@@ -51,7 +51,16 @@ metrics.budgetFailures.plaintiff = 2;
 metrics.wrongMotions.push({ cardId: "show-smj", title: "Show Federal Jurisdiction", reason: "Did not answer personal jurisdiction." });
 addUniqueMetric(metrics.doctrinesTriggered, "Personal jurisdiction");
 addUniqueMetric(metrics.doctrinesTriggered, "PERSONAL JURISDICTION");
-addUniqueMetric(metrics.sourceHooks, "FRCP 12(b)(2)");
+addUniqueMetric(metrics.sourceHooks, "frcp-12");
+metrics.learningCycles.push({
+  attackTitle: "Personal jurisdiction",
+  predictionCorrect: false,
+  initial: { prediction: "attack-fails", reasoning: "The forum contact appears sufficient at first glance." },
+  ruling: { label: "Attack succeeds", body: "The selected defendant lacks the required forum connection.", authorityIds: ["frcp-12"] },
+  revision: "The selected defendant must be analyzed separately from the other defendants.",
+  alteredFactPrompt: "Assume a forum-directed contact.",
+  alteredPrediction: { prediction: "attack-fails", reasoning: "The added contact changes the due-process analysis." }
+});
 incrementMetric(metrics.cardsDrawn, "pj", 2);
 incrementMetric(metrics.cardsPlayed, "pj", 1);
 incrementMetric(metrics.cardsDrawn, "venue", 3);
@@ -67,7 +76,9 @@ expect(assessment.missingProofItems.length === 2, "Assessment should list incomp
 expect(assessment.wrongMotions.length === 1, "Assessment should list wrong motions.");
 expect(assessment.doctrinesTriggered.includes("Personal jurisdiction"), "Assessment should list triggered doctrines.");
 expect(assessment.doctrinesTriggered.length === 1, "Assessment doctrine labels should deduplicate without regard to case.");
-expect(assessment.sourceHooks.includes("FRCP 12(b)(2)"), "Assessment should preserve source hooks.");
+expect(assessment.sourceHooks.includes("frcp-12"), "Assessment should preserve source IDs.");
+expect(assessment.missedDoctrines.includes("Personal jurisdiction"), "Assessment should identify a missed doctrine from the committed prediction.");
+expect(assessment.learningCycles[0].revision.includes("selected defendant"), "Assessment should preserve the completed revision trail.");
 
 const selectedCase = clone(CASES.find((item) => item.id === "software-contract"));
 selectedCase.currentCourt = selectedCase.court;
@@ -97,7 +108,7 @@ const sampleState = {
   eventSequence: 1,
   settings: { activeTopics: new Set(["jurisdiction", "service", "discovery"]), noTimer: true, examMode: false, showExplanations: true },
   tutorial: { enabled: false, step: 0 },
-  judge: { tone: "neutral", title: "Saved", body: "Saved state", cite: "Classroom test", revealed: true },
+  judge: { tone: "neutral", title: "Saved", body: "Saved state", authorityIds: ["frcp-12"], proposition: "Classroom test", revealed: true },
   scenarioPackId: SCENARIO_PACKS[0].id,
   seed: "section-a",
   rngState: firstSeed.rngState,
@@ -106,7 +117,9 @@ const sampleState = {
   eventLog: [],
   roundHistory: [],
   currentRoundMetrics: metrics,
-  lastAssessment: null
+  lastAssessment: null,
+  pendingRoundOutcome: null,
+  learningCycle: { current: null, history: [] }
 };
 const known = {
   scenarioPackIds: new Set(SCENARIO_PACKS.map((item) => item.id)),
@@ -120,6 +133,7 @@ const restored = restoreSessionState(snapshot, known);
 expect(restored.settings.activeTopics instanceof Set, "Restored active topics should be a Set.");
 expect(restored.selectedDefendant?.id === selectedDefendant.id, "Restored defendant should be re-linked to the active case.");
 expect(restored.rngState === sampleState.rngState, "Restored state should preserve deterministic RNG position.");
+expect(snapshot.appVersion === "0.4.0" && snapshot.contentVersion === "2026-08-27.1", "Snapshot should identify the app and content versions.");
 
 const replay = createReplayEnvelope(sampleState, SCENARIO_PACKS[0], 200_000);
 const parsedReplay = parseReplayEnvelope(JSON.stringify(replay), known);

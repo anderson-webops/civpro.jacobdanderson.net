@@ -81,10 +81,14 @@ for (const c of CASES) {
   }
 }
 
-expect(SOURCES.length >= 20, "Generated source list should include doctrine and provider cards.");
+expect(SOURCES.length >= 20, "Generated source list should include governing doctrine cards.");
 for (const source of SOURCES) {
-  expect(Boolean(source.label && source.href && source.note), `Source card ${source.label || "<missing>"} is incomplete.`);
+  expect(Boolean(source.id && source.label && source.href && source.officialHref && source.note), `Source card ${source.label || "<missing>"} is incomplete.`);
   expect(/^https:\/\//.test(source.href), `Source ${source.label} should use an HTTPS URL.`);
+  expect(/^https:\/\//.test(source.officialHref), `Source ${source.label} should link to an official HTTPS source.`);
+  expect(source.authorityType.startsWith("primary-"), `Source ${source.label} should be typed as primary authority.`);
+  expect(source.status === "governing", `Source ${source.label} should be marked governing.`);
+  expect(source.pinpoint.length > 4 && source.proposition.length > 20, `Source ${source.label} needs a pinpoint and supported proposition.`);
 }
 
 expect(TUTORIAL_STEPS.length >= 6, "Tutorial should cover the playable claim-to-trial path.");

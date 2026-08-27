@@ -1,15 +1,26 @@
 import {
   ATTACK_CARDS,
   CASES,
+  LEGAL_SOURCE_REVIEW,
   MOTION_CARDS,
   PHASES,
   SOURCES,
   TOPIC_MODULES,
   TUTORIAL_STEPS
 } from "./data.js";
-import { runRuleTests } from "./rule-tests.js";
 import { DEFAULT_SCENARIO_PACK_ID, SCENARIO_PACKS } from "./scenario-packs.generated.js";
+import { escapeHtml, safeExternalHref, safeId } from "./safe-html.js";
 import {
+  commitInitialPrediction,
+  completeLearningCycle,
+  createLearningCycle,
+  learningReviewPending,
+  predictionLabel,
+  recordLearningRuling
+} from "./learning-cycle.js";
+import {
+  APP_VERSION,
+  CONTENT_VERSION,
   addUniqueMetric,
   aggregatePlaytestStats,
   appendRoundStats,
@@ -42,8 +53,9 @@ import {
 const DEFAULT_TOPICS = new Set(TOPIC_MODULES.filter((item) => item.default).map((item) => item.id));
 const SCENARIO_BY_ID = new Map(SCENARIO_PACKS.map((pack) => [pack.id, pack]));
 const DEFAULT_SCENARIO_PACK = SCENARIO_BY_ID.get(DEFAULT_SCENARIO_PACK_ID);
-const SESSION_STORAGE_KEY = "civpro.v0.3.saved-session";
-const PLAYTEST_STORAGE_KEY = "civpro.v0.3.playtest-stats";
+const SESSION_STORAGE_KEY = "civpro.v0.4.saved-session";
+const AUTOSAVE_STORAGE_KEY = "civpro.v0.4.autosave";
+const PLAYTEST_STORAGE_KEY = "civpro.v0.4.playtest-stats";
 const KNOWN_SESSION_IDS = {
   scenarioPackIds: new Set(SCENARIO_PACKS.map((item) => item.id)),
   caseIds: new Set(CASES.map((item) => item.id)),
@@ -53,11 +65,12 @@ const KNOWN_SESSION_IDS = {
 const CARD_LABELS = Object.fromEntries(
   [...ATTACK_CARDS, ...MOTION_CARDS].map((card) => [card.id, card.subtitle ? `${card.title}: ${card.subtitle}` : card.title])
 );
-const DISCOVERY_SOURCE_HOOKS = {
-  deposition: "FRCP 30",
-  rfp: "FRCP 34",
-  admission: "FRCP 36",
-  expert: "FRCP 26(a)(2)"
+const AUTHORITY_BY_ID = new Map(SOURCES.map((source) => [source.id, source]));
+const DISCOVERY_AUTHORITY_IDS = {
+  deposition: ["frcp-30"],
+  rfp: ["frcp-34"],
+  admission: ["frcp-36"],
+  expert: ["frcp-26"]
 };
 const HAND_LIMITS = { attacks: 6, motions: 8 };
 const state = {
@@ -93,9 +106,16 @@ const state = {
   roundHistory: [],
   currentRoundMetrics: null,
   lastAssessment: null,
+  pendingRoundOutcome: null,
+  learningCycle: {
+    current: null,
+    history: []
+  },
   playtestStats: createEmptyPlaytestStats(),
   sessionStatus: "Local save and replay controls are ready.",
   sessionStatusError: false,
+  autosaveAvailable: null,
+  autosaveReady: false,
   settings: {
     activeTopics: new Set(DEFAULT_SCENARIO_PACK?.topics || DEFAULT_TOPICS),
     studyMode: false,
@@ -111,7 +131,8 @@ const state = {
     tone: "neutral",
     title: "File a claim to start",
     body: "Pick one case from the claim hand. Then choose the defendant you want to sue and defend the filing through threshold attacks, discovery, and summary judgment.",
-    cite: "This prototype abstracts the 1L pretrial sequence into competitive card play.",
+    authorityIds: [],
+    proposition: "This prototype abstracts the 1L pretrial sequence into competitive card play.",
     revealed: true
   }
 };
@@ -123,8 +144,16 @@ function init() {
   setupScenarioControls();
   bindEvents();
   loadPlaytestStats();
+  state.autosaveAvailable = readAutosaveCandidate();
   renderSettings();
   newGame();
+  state.autosaveReady = true;
+  if (state.autosaveAvailable) {
+    setSessionStatus(`A compatible autosave from ${new Date(state.autosaveAvailable.savedAt).toLocaleString()} is ready to resume.`);
+  } else {
+    persistAutosave();
+  }
+  renderAutosaveControls();
 }
 
 function bindElements() {
@@ -139,7 +168,6 @@ function bindElements() {
     "new-game-button",
     "tutorial-button",
     "print-button",
-    "test-button",
     "study-mode",
     "phase-list",
     "round-value",
@@ -153,6 +181,8 @@ function bindElements() {
     "scenario-summary",
     "save-session-button",
     "load-session-button",
+    "resume-autosave-button",
+    "discard-autosave-button",
     "export-replay-button",
     "import-replay-input",
     "session-status",
@@ -167,6 +197,7 @@ function bindElements() {
     "attack-hand",
     "motion-hand",
     "discovery-list",
+    "learning-cycle-output",
     "judge-output",
     "assessment-output",
     "stats-output",
@@ -181,11 +212,11 @@ function bindElements() {
 function bindEvents() {
   els["new-game-button"].addEventListener("click", () => {
     state.tutorial.enabled = false;
+    discardAutosave(false);
     newGame();
   });
   els["tutorial-button"].addEventListener("click", startTutorial);
   els["print-button"].addEventListener("click", printCards);
-  els["test-button"].addEventListener("click", showRuleTests);
   els["draw-attack-button"].addEventListener("click", () => drawToHand("attacks", 1, HAND_LIMITS.attacks));
   els["draw-motion-button"].addEventListener("click", () => drawToHand("motions", 1, HAND_LIMITS.motions));
   els["study-mode"].addEventListener("change", () => {
@@ -203,6 +234,8 @@ function bindEvents() {
   els["apply-scenario-button"].addEventListener("click", applyScenarioSelection);
   els["save-session-button"].addEventListener("click", saveSession);
   els["load-session-button"].addEventListener("click", loadSession);
+  els["resume-autosave-button"].addEventListener("click", resumeAutosave);
+  els["discard-autosave-button"].addEventListener("click", () => discardAutosave(true));
   els["export-replay-button"].addEventListener("click", exportReplay);
   els["import-replay-input"].addEventListener("change", importReplay);
   els["clear-stats-button"].addEventListener("click", clearPlaytestStats);
@@ -221,6 +254,8 @@ function newGame() {
   state.roundHistory = [];
   state.currentRoundMetrics = null;
   state.lastAssessment = null;
+  state.pendingRoundOutcome = null;
+  state.learningCycle = { current: null, history: [] };
   state.players = [
     { name: "Player 1", score: 0, dismissed: 0 },
     { name: "Player 2", score: 0, dismissed: 0 }
@@ -280,6 +315,8 @@ function startRound(initialHand = false) {
   state.selectedDefendant = null;
   state.docket = [];
   state.pendingAttack = null;
+  state.pendingRoundOutcome = null;
+  state.learningCycle.current = null;
   state.attackCount = 0;
   state.maxAttacks = pack?.maxAttacks || 2;
   state.currentRoundMetrics = createRoundMetrics({
@@ -382,7 +419,7 @@ function chooseDefendant(defendantId) {
   state.activeCase.currentForum = state.activeCase.forumState;
   state.activeCase.dismissed = false;
   state.activeCase.collectedEvidence = [];
-  state.activeCase.blockedRemoval = Boolean(defendant.forumDefendant);
+  state.activeCase.joinedDefendantIds = [];
   state.phase = "attack";
   state.currentRoundMetrics.defendantId = defendant.id;
   state.currentRoundMetrics.defendantName = defendant.name;
@@ -417,27 +454,37 @@ function playAttack(instanceId) {
     attackCount: state.attackCount,
     missingEvidence: missingEvidence(state.activeCase)
   });
-  trackDoctrine(attack.subtitle, evaluation.source);
+  trackDoctrine(attack.subtitle, evaluation.authorityIds);
   state.pendingAttack = { attack, evaluation };
+  state.learningCycle.current = createLearningCycle({
+    round: state.round,
+    attack,
+    evaluation,
+    activeCase: state.activeCase,
+    selectedDefendant: state.selectedDefendant,
+    responseOptions: state.hands.motions
+      .filter((card) => card.kind === "motion" && card.answers.includes(attack.id))
+      .map((card) => card.id)
+  });
   state.phase = "response";
   recordDocket(`${attack.title} played`, attack.subtitle, {
     type: "attack-played",
     cardId: attack.id,
     doctrine: attack.subtitle,
-    source: evaluation.source
+    authorityIds: evaluation.authorityIds
   });
-  setJudge("neutral", `${attack.subtitle} pending`, evaluation.prompt, evaluation.source);
-  startTimer("Motion response due", activeScenarioPack()?.timers.responseSeconds || 20, () => resolveAttack(null));
+  setJudge("neutral", `${attack.subtitle} pending`, evaluation.prompt, evaluation.authorityIds, evaluation.proposition);
   render();
 }
 
 function canPlayAttack(attack) {
+  if (isLearningActionBlocked()) return false;
   if (attack.timing === "summary") return state.phase === "summary";
   return state.phase === "attack";
 }
 
 function respondWithMotion(instanceId) {
-  if (state.phase !== "response" || !state.pendingAttack) return;
+  if (state.phase !== "response" || !state.pendingAttack || state.learningCycle.current?.stage !== "response") return;
   const motion = state.hands.motions.find((card) => card.instanceId === normalizeInstanceId(instanceId));
   if (!motion || motion.kind !== "motion" || !spend("plaintiff", motion.cost)) return;
   removeFromHand("motions", instanceId);
@@ -453,6 +500,18 @@ function resolveAttack(motion) {
   state.pendingAttack = null;
   const motionIsResponsive = Boolean(motion && motion.answers.includes(attack.id));
   const correctMotion = motionIsResponsive && evaluation.counterWorks;
+  const attackSucceeded = Boolean(evaluation.hasMerit && !correctMotion);
+  if (state.learningCycle.current?.stage === "response") {
+    state.learningCycle.current = recordLearningRuling(state.learningCycle.current, {
+      attackSucceeded,
+      motionId: motion?.id || null,
+      motionTitle: motion?.title || null,
+      motionResponsive: motionIsResponsive,
+      body: attackSucceeded ? evaluation.body : evaluation.cureDetail || evaluation.winDetail,
+      authorityIds: evaluation.authorityIds,
+      proposition: evaluation.proposition
+    });
+  }
 
   if (attack.id === "summary-judgment") {
     resolveSummaryJudgment(motion, motionIsResponsive);
@@ -495,9 +554,9 @@ function resolveAttack(motion) {
     recordDocket("Issue cured", evaluation.cureDetail || evaluation.winDetail, {
       type: "attack-cured",
       attackId: attack.id,
-      source: evaluation.source
+      authorityIds: evaluation.authorityIds
     });
-    setJudge("good", "Procedural save", evaluation.cureDetail || evaluation.winDetail, evaluation.source);
+    setJudge("good", "Procedural save", evaluation.cureDetail || evaluation.winDetail, evaluation.authorityIds, evaluation.proposition);
     continueAfterThresholdAttack();
     return;
   }
@@ -507,9 +566,9 @@ function resolveAttack(motion) {
   recordDocket("Attack denied", evaluation.winDetail, {
     type: "attack-denied",
     attackId: attack.id,
-    source: evaluation.source
+    authorityIds: evaluation.authorityIds
   });
-  setJudge("good", "Motion granted", evaluation.winDetail, evaluation.source);
+  setJudge("good", "Motion granted", evaluation.winDetail, evaluation.authorityIds, evaluation.proposition);
   continueAfterThresholdAttack();
 }
 
@@ -523,9 +582,9 @@ function applyUnansweredAttack(attack, evaluation) {
   recordDocket("Attack fails", evaluation.winDetail || "The facts do not support the procedural attack.", {
     type: "attack-denied",
     attackId: attack.id,
-    source: evaluation.source
+    authorityIds: evaluation.authorityIds
   });
-  setJudge("neutral", "Attack fails", evaluation.winDetail || "The facts do not support the procedural attack.", evaluation.source);
+  setJudge("neutral", "Attack fails", evaluation.winDetail || "The facts do not support the procedural attack.", evaluation.authorityIds, evaluation.proposition);
   continueAfterThresholdAttack();
 }
 
@@ -548,26 +607,35 @@ function applyMeritoriousAttack(attack, evaluation, body) {
     recordDocket("Case removed", "The claim moves to federal court.", {
       type: "forum-changed",
       attackId: attack.id,
-      source: evaluation.source
+      authorityIds: evaluation.authorityIds
     });
-    setJudge("bad", "Removed to federal court", body || evaluation.body, evaluation.source);
+    setJudge("bad", "Removed to federal court", body || evaluation.body, evaluation.authorityIds, evaluation.proposition);
     continueAfterThresholdAttack();
     return;
   }
 
   if (attack.id === "join") {
-    state.activeCase.blockedRemoval = true;
-    state.activeCase.joinedForumDefendant = true;
+    const joinedDefendant = state.activeCase.defendants.find((item) =>
+      item.forumDefendant
+      && item.id !== state.selectedDefendant.id
+      && item.sameTransaction
+      && !(state.activeCase.joinedDefendantIds || []).includes(item.id)
+    );
+    state.activeCase.joinedDefendantIds = [...(state.activeCase.joinedDefendantIds || [])];
+    if (joinedDefendant) state.activeCase.joinedDefendantIds.push(joinedDefendant.id);
     if (state.activeCase.currentCourt === "federal" && !hasFederalSmj(state.activeCase, state.selectedDefendant)) {
       state.activeCase.currentCourt = "state";
     }
     state.attackCount += 1;
-    recordDocket("Local party joined", "Diversity leverage is reduced and removal is blocked.", {
+    recordDocket("Local party joined", joinedDefendant
+      ? `${joinedDefendant.name} is joined. Citizenship and removal must now be analyzed separately.`
+      : "A qualifying local party is joined. Citizenship and removal must now be analyzed separately.", {
       type: "party-joined",
       attackId: attack.id,
-      source: evaluation.source
+      joinedDefendantId: joinedDefendant?.id || null,
+      authorityIds: evaluation.authorityIds
     });
-    setJudge("bad", "Joinder changes the forum math", body || evaluation.body, evaluation.source);
+    setJudge("bad", "Joinder changes the forum math", body || evaluation.body, evaluation.authorityIds, evaluation.proposition);
     continueAfterThresholdAttack();
     return;
   }
@@ -578,14 +646,14 @@ function applyMeritoriousAttack(attack, evaluation, body) {
     recordDocket("Transferred", `Venue moves to ${state.activeCase.eventState}.`, {
       type: "forum-changed",
       attackId: attack.id,
-      source: evaluation.source
+      authorityIds: evaluation.authorityIds
     });
-    setJudge("bad", "Venue attack succeeds", body || evaluation.body, evaluation.source);
+    setJudge("bad", "Venue attack succeeds", body || evaluation.body, evaluation.authorityIds, evaluation.proposition);
     continueAfterThresholdAttack();
     return;
   }
 
-  dismissCase(attack.subtitle, body || evaluation.body, evaluation.source);
+  dismissCase(attack.subtitle, body || evaluation.body, evaluation.authorityIds, evaluation.proposition);
 }
 
 function continueAfterThresholdAttack() {
@@ -600,7 +668,7 @@ function continueAfterThresholdAttack() {
 }
 
 function passAttacks() {
-  if (state.phase !== "attack") return;
+  if (state.phase !== "attack" || isLearningActionBlocked()) return;
   stopTimer();
   recordDocket("Threshold attacks closed", "The case moves into discovery.", { type: "phase-changed" });
   advanceTutorial("pass-attacks");
@@ -620,14 +688,14 @@ function enterDiscovery() {
 }
 
 function requestEvidence(evidenceId, instanceId) {
-  if (state.phase !== "discovery" || !state.activeCase) return;
+  if (state.phase !== "discovery" || !state.activeCase || isLearningActionBlocked()) return;
   const evidence = state.activeCase.evidence.find((item) => item.id === evidenceId);
   const tool = state.hands.motions.find((item) => item.instanceId === normalizeInstanceId(instanceId));
   if (!evidence || !tool || tool.kind !== "discovery-tool" || !spend("plaintiff", tool.cost)) return;
   removeFromHand("motions", instanceId);
   state.discards.motions.push(tool);
   trackCardPlayed(tool);
-  trackDoctrine(tool.title, DISCOVERY_SOURCE_HOOKS[tool.tool]);
+  trackDoctrine(tool.title, DISCOVERY_AUTHORITY_IDS[tool.tool]);
 
   if (tool.tool !== evidence.tool) {
     const reason = `${tool.title} does not match ${evidence.title}; ${toolName(evidence.tool)} was required.`;
@@ -638,7 +706,7 @@ function requestEvidence(evidenceId, instanceId) {
       evidenceId: evidence.id,
       correct: false
     });
-    setJudge("bad", "Discovery miss", `${evidence.title} calls for ${toolName(evidence.tool)}.`, "The game maps discovery tools to their ordinary Civ Pro use.");
+    setJudge("bad", "Discovery miss", `${evidence.title} calls for ${toolName(evidence.tool)}.`);
     render();
     return;
   }
@@ -648,7 +716,7 @@ function requestEvidence(evidenceId, instanceId) {
     cardId: tool.id,
     evidenceId: evidence.id,
     correct: true,
-    source: DISCOVERY_SOURCE_HOOKS[tool.tool]
+    authorityIds: DISCOVERY_AUTHORITY_IDS[tool.tool]
   });
   const resistance = evidence.resistance || "resistance";
   if (evidence.resistance) {
@@ -657,7 +725,8 @@ function requestEvidence(evidenceId, instanceId) {
       "neutral",
       "Discovery objection raised",
       `The defense objects on ${resistanceLabel(resistance)} grounds. Use a discovery motion card to solve it.`,
-      "Rule 37 permits motions to compel after discovery resistance."
+      ["frcp-26", "frcp-37"],
+      "Rules 26 and 37 frame proportional discovery, objections, and motions to compel."
     );
     advanceTutorial("request-resistant-docs");
     render();
@@ -666,7 +735,7 @@ function requestEvidence(evidenceId, instanceId) {
 
   collectEvidence(evidence);
   if (state.phase !== "trial") {
-    setJudge("good", "Discovery obtained", `${evidence.title} is collected.`, "Targeted discovery generally proceeds when relevant and proportional.");
+    setJudge("good", "Discovery obtained", `${evidence.title} is collected.`, DISCOVERY_AUTHORITY_IDS[evidence.tool], "The selected discovery device is used to build record evidence relevant to the claim.");
   }
   if (evidence.tool === "deposition") advanceTutorial("collect-deposition");
   if (evidence.tool === "expert") advanceTutorial("expert-proof");
@@ -674,14 +743,14 @@ function requestEvidence(evidenceId, instanceId) {
 }
 
 function answerDiscoveryResistance(instanceId) {
-  if (state.phase !== "discovery" || !state.activeCase) return;
+  if (state.phase !== "discovery" || !state.activeCase || isLearningActionBlocked()) return;
   const evidence = state.activeCase.evidence.find((item) => item.pendingResistance);
   const motion = state.hands.motions.find((item) => item.instanceId === normalizeInstanceId(instanceId));
   if (!evidence || !motion || motion.kind !== "discovery" || !spend("plaintiff", motion.cost)) return;
   removeFromHand("motions", instanceId);
   state.discards.motions.push(motion);
   trackCardPlayed(motion);
-  trackDoctrine("Discovery objections", "FRCP 26(b)(1), 26(b)(5), and 37");
+  trackDoctrine("Discovery objections", ["frcp-26", "frcp-37"]);
   const resistance = evidence.pendingResistance;
   const works = motion.answers.includes(resistance);
   recordDocket(motion.title, motion.text, {
@@ -689,14 +758,14 @@ function answerDiscoveryResistance(instanceId) {
     cardId: motion.id,
     evidenceId: evidence.id,
     correct: works,
-    source: "FRCP 26 and 37"
+    authorityIds: ["frcp-26", "frcp-37"]
   });
 
   if (!works) {
     trackWrongMotion(motion, `Did not solve the ${resistanceLabel(resistance)} objection.`, evidence.id);
     delete evidence.pendingResistance;
     evidence.failed = true;
-    setJudge("bad", "Discovery denied", `${motion.title} does not solve a ${resistanceLabel(resistance)} objection.`, "Discovery disputes require the right procedural response.");
+    setJudge("bad", "Discovery denied", `${motion.title} does not solve a ${resistanceLabel(resistance)} objection.`, ["frcp-26", "frcp-37"], "Discovery disputes require a response suited to the objection and Rule 37 procedure.");
     render();
     return;
   }
@@ -704,7 +773,7 @@ function answerDiscoveryResistance(instanceId) {
   delete evidence.pendingResistance;
   collectEvidence(evidence);
   if (state.phase !== "trial") {
-    setJudge("good", "Discovery motion granted", `${motion.title} answers the objection. ${evidence.title} is now in the record.`, "This abstracts Rule 37 motion-to-compel practice.");
+    setJudge("good", "Discovery motion granted", `${motion.title} answers the objection. ${evidence.title} is now in the record.`, ["frcp-26", "frcp-37"], "Rules 26 and 37 govern discovery scope, objections, and enforcement.");
   }
   advanceTutorial("motion-to-compel");
   render();
@@ -719,7 +788,7 @@ function collectEvidence(evidence) {
   recordDocket("Evidence collected", evidence.title, {
     type: "evidence-collected",
     evidenceId: evidence.id,
-    source: DISCOVERY_SOURCE_HOOKS[evidence.tool]
+    authorityIds: DISCOVERY_AUTHORITY_IDS[evidence.tool]
   });
   if (allEvidenceCollected(state.activeCase)) {
     awardTrialReady();
@@ -727,13 +796,13 @@ function collectEvidence(evidence) {
 }
 
 function closeDiscovery() {
-  if (state.phase !== "discovery") return;
+  if (state.phase !== "discovery" || isLearningActionBlocked()) return;
   state.phase = "summary";
   recordDocket("Discovery closed", `${missingEvidence(state.activeCase).length} proof item(s) remain incomplete.`, {
     type: "phase-changed",
-    source: "FRCP 56"
+    authorityIds: ["frcp-56"]
   });
-  setJudge("neutral", "Discovery closed", "The defense may now play summary judgment. The plaintiff must show record evidence for every required proof item.", "Rule 56 turns the discovery record into the next procedural fight.");
+  setJudge("neutral", "Discovery closed", "The defense may now play summary judgment. The plaintiff must show record evidence for every required proof item.", ["frcp-56"], "Rule 56 turns the discovery record into the next procedural fight.");
   render();
 }
 
@@ -751,20 +820,20 @@ function resolveSummaryJudgment(motion, motionIsResponsive) {
   recordDocket(
     "Rule 56 motion",
     missing.length ? `Missing proof: ${missing.map((item) => item.title).join(", ")}.` : "Plaintiff has evidence on every listed item.",
-    { type: "summary-judgment", source: "FRCP 56", correct: missing.length === 0 }
+    { type: "summary-judgment", authorityIds: ["frcp-56"], correct: missing.length === 0 }
   );
 
   if (!motion || !motionIsResponsive || missing.length) {
     if (missing.length) {
       trackAttackResult(true);
-      dismissCase("Summary judgment", "The plaintiff lacks record evidence for every required element.", "FRCP 56");
+      dismissCase("Summary judgment", "The plaintiff lacks record evidence for every required element.", ["frcp-56"], "Rule 56 requires record support sufficient to show a genuine dispute of material fact.");
       return;
     }
   }
 
   trackAttackResult(false);
   awardTrialReady();
-  setJudge("good", "Summary judgment denied", "The record contains every required proof item, so the claim is trial ready.", "FRCP 56");
+  setJudge("good", "Summary judgment denied", "The record contains every required proof item, so the claim is trial ready.", ["frcp-56"], "The game treats a complete proof checklist as record support sufficient to survive its Rule 56 abstraction.");
 }
 
 function awardTrialReady() {
@@ -776,31 +845,32 @@ function awardTrialReady() {
     type: "round-outcome",
     outcome: "trial-ready"
   });
-  finalizeRound({ type: "trial-ready", label: "Trial ready", reason: "Every required proof item is in the record." });
+  finalizeRoundWhenReady({ type: "trial-ready", label: "Trial ready", reason: "Every required proof item is in the record." });
   setJudge("good", "Claim reaches trial", `The plaintiff survives threshold attacks and builds the record. Score ${points} points, then rotate roles.`, "The game treats trial readiness as the Civ Pro win condition.");
   stopTimer();
   render();
 }
 
-function dismissCase(title, body, source) {
+function dismissCase(title, body, authorityIds = [], proposition = "") {
   if (!state.activeCase || state.phase === "trial") return;
   state.activeCase.dismissed = true;
   state.players[state.defense].score += 1;
   state.players[state.plaintiff].dismissed += 1;
   state.phase = "trial";
-  trackDoctrine(title, source);
+  trackDoctrine(title, authorityIds);
   recordDocket("Claim dismissed", title, {
     type: "round-outcome",
     outcome: "dismissed",
-    source
+    authorityIds
   });
-  finalizeRound({ type: "dismissed", label: "Dismissed", reason: title });
-  setJudge("bad", title, `${body} Defense scores 1 point.`, source);
+  finalizeRoundWhenReady({ type: "dismissed", label: "Dismissed", reason: title });
+  setJudge("bad", title, `${body} Defense scores 1 point.`, authorityIds, proposition);
   stopTimer();
   render();
 }
 
 function nextRound() {
+  if (isLearningActionBlocked()) return;
   stopTimer();
   advanceTutorial("next-round");
   const roundLimit = activeScenarioPack()?.rounds;
@@ -810,7 +880,7 @@ function nextRound() {
       "good",
       "Classroom session complete",
       `${roundLimit} planned round${roundLimit === 1 ? "" : "s"} finished. Use the assessment and local balance signals for debrief, then export the replay if the class found a confusing result.`,
-      "Version 0.3 classroom pilot workflow."
+      "Version 0.4 source-linked classroom workflow."
     );
     setSessionStatus(`Session complete after ${roundLimit} planned round${roundLimit === 1 ? "" : "s"}.`);
     render();
@@ -893,10 +963,12 @@ function trackWrongMotion(card, reason, targetId) {
   });
 }
 
-function trackDoctrine(doctrine, source) {
+function trackDoctrine(doctrine, authorityIds = []) {
   if (!state.currentRoundMetrics) return;
   addUniqueMetric(state.currentRoundMetrics.doctrinesTriggered, doctrine);
-  addUniqueMetric(state.currentRoundMetrics.sourceHooks, source);
+  for (const authorityId of normalizeAuthorityIds(authorityIds)) {
+    addUniqueMetric(state.currentRoundMetrics.sourceHooks, authorityId);
+  }
 }
 
 function finalizeRound(outcome) {
@@ -912,9 +984,16 @@ function finalizeRound(outcome) {
   persistPlaytestStats();
 }
 
+function finalizeRoundWhenReady(outcome) {
+  state.pendingRoundOutcome = outcome;
+  if (learningReviewPending(state.learningCycle.current)) return;
+  finalizeRound(outcome);
+  state.pendingRoundOutcome = null;
+}
+
 function startTimer(label, seconds, onExpire) {
   stopTimer();
-  if (state.settings.studyMode || state.settings.noTimer) {
+  if (state.settings.studyMode || state.settings.noTimer || isLearningActionBlocked()) {
     state.secondsLeft = null;
     state.deadline = null;
     return;
@@ -933,6 +1012,10 @@ function startTimer(label, seconds, onExpire) {
   }, 1000);
 }
 
+function isLearningActionBlocked() {
+  return ["predict", "revise"].includes(state.learningCycle.current?.stage);
+}
+
 function stopTimer() {
   if (state.timer) window.clearInterval(state.timer);
   state.timer = null;
@@ -940,14 +1023,96 @@ function stopTimer() {
   state.secondsLeft = null;
 }
 
-function setJudge(tone, title, body, cite) {
+function setJudge(tone, title, body, authorityIds = [], proposition = "") {
+  if (typeof authorityIds === "string") {
+    proposition = proposition || authorityIds;
+    authorityIds = [];
+  }
   state.judge = {
     tone,
     title,
     body,
-    cite,
+    authorityIds: normalizeAuthorityIds(authorityIds),
+    proposition,
     revealed: !state.settings.examMode || tone === "neutral"
   };
+}
+
+function normalizeAuthorityIds(authorityIds) {
+  const values = Array.isArray(authorityIds) ? authorityIds : authorityIds ? [authorityIds] : [];
+  return [...new Set(values.filter((id) => AUTHORITY_BY_ID.has(id)))];
+}
+
+function submitInitialPrediction(form) {
+  try {
+    const formData = new FormData(form);
+    state.learningCycle.current = commitInitialPrediction(state.learningCycle.current, {
+      prediction: formData.get("prediction"),
+      reasoning: formData.get("reasoning")
+    });
+    recordDocket("Prediction committed", predictionLabel(state.learningCycle.current.initial.prediction), {
+      type: "learning-prediction",
+      attackId: state.learningCycle.current.attackId
+    });
+    setJudge(
+      "neutral",
+      "Prediction locked",
+      state.learningCycle.current.mechanicalCheck.message,
+      state.pendingAttack?.evaluation.authorityIds || [],
+      state.pendingAttack?.evaluation.proposition || ""
+    );
+    startTimer("Motion response due", activeScenarioPack()?.timers.responseSeconds || 20, () => resolveAttack(null));
+    setSessionStatus("Initial prediction preserved. Choose a response or stand on the prediction.");
+    render();
+  } catch (error) {
+    setSessionStatus(error.message, true);
+    renderLearningCycle();
+  }
+}
+
+function standOnPrediction() {
+  if (state.phase !== "response" || state.learningCycle.current?.stage !== "response") return;
+  resolveAttack(null);
+}
+
+function submitLearningRevision(form) {
+  try {
+    const formData = new FormData(form);
+    const completed = completeLearningCycle(state.learningCycle.current, {
+      revision: formData.get("revision"),
+      alteredPrediction: formData.get("alteredPrediction"),
+      alteredReasoning: formData.get("alteredReasoning")
+    });
+    state.learningCycle.current = completed;
+    state.learningCycle.history.push(clone(completed));
+    if (state.currentRoundMetrics) {
+      state.currentRoundMetrics.learningCycles ||= [];
+      state.currentRoundMetrics.learningCycles.push(clone(completed));
+    }
+    recordDocket("Ruling reflection completed", completed.predictionCorrect ? "Initial prediction matched the ruling." : "Initial prediction was revised after the ruling.", {
+      type: "learning-revision",
+      attackId: completed.attackId,
+      predictionCorrect: completed.predictionCorrect,
+      authorityIds: completed.ruling.authorityIds
+    });
+    if (state.pendingRoundOutcome) {
+      const outcome = state.pendingRoundOutcome;
+      state.pendingRoundOutcome = null;
+      finalizeRound(outcome);
+    }
+    resumePhaseTimer();
+    setSessionStatus("Revision and altered-fact prediction preserved in the session debrief.");
+    render();
+  } catch (error) {
+    setSessionStatus(error.message, true);
+    renderLearningCycle();
+  }
+}
+
+function resumePhaseTimer() {
+  if (state.phase === "attack") {
+    startTimer("Defense attack window", activeScenarioPack()?.timers.attackSeconds || 18, () => passAttacks());
+  }
 }
 
 function advanceTutorial(action) {
@@ -966,7 +1131,7 @@ function setupScenarioControls() {
   const tracks = [...new Map(SCENARIO_PACKS.map((pack) => [pack.trackId, pack.shortTitle])).entries()];
   const durations = [...new Set(SCENARIO_PACKS.map((pack) => pack.durationMinutes))].sort((a, b) => a - b);
   els["scenario-track"].innerHTML = tracks
-    .map(([id, title]) => `<option value="${id}">${title}</option>`)
+    .map(([id, title]) => `<option value="${safeId(id)}">${escapeHtml(title)}</option>`)
     .join("");
   els["scenario-duration"].innerHTML = durations
     .map((minutes) => `<option value="${minutes}">${minutes} minutes</option>`)
@@ -1031,6 +1196,7 @@ function renderScenarioSummary(pack = activeScenarioPack(), preview = false) {
     <p><strong>${escapeHtml(pack.shortTitle)}</strong></p>
     <p>${escapeHtml(pack.summary)}</p>
     <p class="schedule-line">${pack.schedule.briefing} min brief / ${pack.schedule.play} min play / ${pack.schedule.debrief} min debrief</p>
+    <p>App ${escapeHtml(APP_VERSION)}; content ${escapeHtml(CONTENT_VERSION)}; sources reviewed through ${escapeHtml(LEGAL_SOURCE_REVIEW.reviewedThrough)}.</p>
     <details>
       <summary>Objectives and checkpoints</summary>
       <ul>${pack.learningObjectives.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
@@ -1045,6 +1211,54 @@ function getLocalStorage() {
   } catch {
     return null;
   }
+}
+
+function readAutosaveCandidate() {
+  const storage = getLocalStorage();
+  const raw = storage?.getItem(AUTOSAVE_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const snapshot = JSON.parse(raw);
+    restoreSessionState(snapshot, KNOWN_SESSION_IDS);
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+function persistAutosave() {
+  if (!state.autosaveReady || state.autosaveAvailable) return;
+  const storage = getLocalStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(createSessionSnapshot(state)));
+  } catch {
+    setSessionStatus("Autosave is unavailable in this browser. Export a replay for a portable copy.", true);
+  }
+}
+
+function resumeAutosave() {
+  if (!state.autosaveAvailable) return;
+  const snapshot = state.autosaveAvailable;
+  state.autosaveAvailable = null;
+  restoreSnapshot(snapshot, `Autosave resumed from ${new Date(snapshot.savedAt).toLocaleString()}. Timers remain paused until the next timed action.`);
+}
+
+function discardAutosave(announce = true) {
+  const storage = getLocalStorage();
+  if (storage) storage.removeItem(AUTOSAVE_STORAGE_KEY);
+  state.autosaveAvailable = null;
+  if (announce) {
+    setSessionStatus("Prior autosave discarded. The current session will now autosave locally.");
+    renderAutosaveControls();
+    persistAutosave();
+  }
+}
+
+function renderAutosaveControls() {
+  const available = Boolean(state.autosaveAvailable);
+  els["resume-autosave-button"].hidden = !available;
+  els["discard-autosave-button"].hidden = !available;
 }
 
 function loadPlaytestStats() {
@@ -1109,6 +1323,8 @@ function restoreSnapshot(snapshot, message) {
     restored.currentRoundMetrics.startedAt = Date.now() - elapsedAtSave;
   }
   Object.assign(state, restored);
+  state.autosaveAvailable = null;
+  state.autosaveReady = true;
   syncScenarioControls();
   renderSettings();
   setSessionStatus(message);
@@ -1173,13 +1389,16 @@ function render() {
   renderSources();
   renderClaimHand();
   renderActiveCase();
+  renderLearningCycle();
   renderAttackHand();
   renderMotionHand();
   renderDiscovery();
   renderJudge();
   renderAssessment();
   renderPlaytestStats();
+  renderAutosaveControls();
   setSessionStatus(state.sessionStatus, state.sessionStatusError);
+  persistAutosave();
 }
 
 function renderScores() {
@@ -1201,9 +1420,9 @@ function renderTimer() {
 
 function renderPhases() {
   els["phase-list"].innerHTML = PHASES.map(([id, label], index) => `
-    <li class="phase-step ${state.phase === id ? "active" : ""}">
+    <li class="phase-step ${state.phase === id ? "active" : ""}"${state.phase === id ? " aria-current=\"step\"" : ""}>
       <span>${index + 1}</span>
-      <strong>${label}</strong>
+      <strong>${escapeHtml(label)}</strong>
     </li>
   `).join("");
 }
@@ -1224,8 +1443,8 @@ function renderTutorial() {
   const step = TUTORIAL_STEPS[state.tutorial.step];
   els["tutorial-panel"].innerHTML = `
     <span class="section-label">Tutorial</span>
-    <h2>${step.title}</h2>
-    <p>${step.body}</p>
+    <h2>${escapeHtml(step.title)}</h2>
+    <p>${escapeHtml(step.body)}</p>
     <p class="tutorial-count">Step ${state.tutorial.step + 1} of ${TUTORIAL_STEPS.length}</p>
   `;
 }
@@ -1239,14 +1458,14 @@ function renderSettings() {
   ];
   els["mode-toggles"].innerHTML = modes.map(([id, label]) => `
     <label class="toggle small">
-      <input type="checkbox" data-mode="${id}" ${state.settings[id] ? "checked" : ""}>
-      <span>${label}</span>
+      <input type="checkbox" data-mode="${escapeHtml(id)}" ${state.settings[id] ? "checked" : ""}>
+      <span>${escapeHtml(label)}</span>
     </label>
   `).join("");
   els["topic-toggles"].innerHTML = TOPIC_MODULES.map((topic) => `
     <label class="toggle small">
-      <input type="checkbox" data-topic="${topic.id}" ${state.settings.activeTopics.has(topic.id) ? "checked" : ""}>
-      <span>${topic.label}${topic.preview ? " (preview)" : ""}</span>
+      <input type="checkbox" data-topic="${safeId(topic.id)}" ${state.settings.activeTopics.has(topic.id) ? "checked" : ""}>
+      <span>${escapeHtml(topic.label)}${topic.preview ? " (preview)" : ""}</span>
     </label>
   `).join("");
   els["mode-toggles"].querySelectorAll("[data-mode]").forEach((input) => {
@@ -1271,21 +1490,125 @@ function renderSettings() {
 }
 
 function renderSources() {
-  els["source-list"].innerHTML = SOURCES.map((source) => `
-    <li><a href="${source.href}" target="_blank" rel="noreferrer">${source.label}</a>: ${source.note}</li>
+  const activeSources = normalizeAuthorityIds(state.judge.authorityIds)
+    .map((id) => AUTHORITY_BY_ID.get(id))
+    .filter(Boolean);
+  if (!activeSources.length) {
+    els["source-list"].innerHTML = "<li>No governing authority is active for this bench note.</li>";
+    return;
+  }
+  els["source-list"].innerHTML = activeSources.map((source) => `
+    <li>
+      <span class="authority-type">${escapeHtml(authorityTypeLabel(source.authorityType))}</span>
+      <a href="${safeExternalHref(source.officialHref || source.href)}" target="_blank" rel="noreferrer">${escapeHtml(source.label)}</a>
+      <strong>${escapeHtml(source.pinpoint)}</strong>
+      <p>${escapeHtml(source.proposition)}</p>
+      ${source.officialHref && source.href !== source.officialHref
+        ? `<a class="readable-source" href="${safeExternalHref(source.href)}" target="_blank" rel="noreferrer">Readable reference</a>`
+        : ""}
+    </li>
   `).join("");
+}
+
+function renderLearningCycle() {
+  const cycle = state.learningCycle.current;
+  if (!cycle) {
+    els["learning-cycle-output"].innerHTML = `
+      <span class="section-label">Learning cycle</span>
+      <h2>Commit before the ruling</h2>
+      <p>When an attack is played, predict the result, choose a procedural response, revise after the ruling, and test one altered fact.</p>
+    `;
+    return;
+  }
+
+  if (cycle.stage === "predict") {
+    els["learning-cycle-output"].innerHTML = `
+      <span class="status-pill">Step 1 of 4: committed answer</span>
+      <h2>${escapeHtml(cycle.attackTitle)}</h2>
+      <p><strong>Fact pattern:</strong> ${escapeHtml(cycle.factPattern)}</p>
+      <p><strong>Issue:</strong> ${escapeHtml(cycle.issuePrompt)}</p>
+      <form data-learning-form="prediction" class="reflection-form">
+        <fieldset>
+          <legend>Predict the ruling before choosing a response</legend>
+          <label><input type="radio" name="prediction" value="attack-succeeds" required> Attack succeeds</label>
+          <label><input type="radio" name="prediction" value="attack-fails" required> Attack fails</label>
+        </fieldset>
+        <label for="initial-reasoning">Why? Identify the controlling fact and rule.</label>
+        <textarea id="initial-reasoning" name="reasoning" rows="3" maxlength="1200" required></textarea>
+        <button class="button blue" type="submit">Commit prediction</button>
+      </form>
+    `;
+  } else if (cycle.stage === "response") {
+    const responsiveCards = cycle.mechanicalCheck.responsiveCardIds.map((id) => CARD_LABELS[id] || id);
+    els["learning-cycle-output"].innerHTML = `
+      <span class="status-pill">Step 2 of 4: mechanical check</span>
+      <h2>Prediction locked: ${escapeHtml(predictionLabel(cycle.initial.prediction))}</h2>
+      <p>${escapeHtml(cycle.initial.reasoning)}</p>
+      <p><strong>Check:</strong> ${escapeHtml(cycle.mechanicalCheck.message)}</p>
+      ${responsiveCards.length ? `<p><strong>Responsive cards in hand:</strong> ${responsiveCards.map(escapeHtml).join("; ")}</p>` : ""}
+      <button class="button secondary" type="button" data-action="stand-on-prediction">Use no response</button>
+    `;
+  } else if (cycle.stage === "revise") {
+    els["learning-cycle-output"].innerHTML = `
+      <span class="status-pill">Steps 3 and 4: revise and transfer</span>
+      <h2>${escapeHtml(cycle.ruling.label)}</h2>
+      <p>${escapeHtml(cycle.ruling.body)}</p>
+      <p><strong>Your initial answer:</strong> ${escapeHtml(predictionLabel(cycle.initial.prediction))}. ${escapeHtml(cycle.initial.reasoning)}</p>
+      <p><strong>Comparison:</strong> ${cycle.predictionCorrect ? "Your prediction matched the ruling." : "Your prediction did not match the ruling."}</p>
+      <form data-learning-form="revision" class="reflection-form">
+        <label for="revision-reasoning">Revise your analysis after seeing the ruling.</label>
+        <textarea id="revision-reasoning" name="revision" rows="3" maxlength="1200" required></textarea>
+        <fieldset>
+          <legend>${escapeHtml(cycle.alteredFactPrompt)}</legend>
+          <label><input type="radio" name="alteredPrediction" value="attack-succeeds" required> Attack succeeds</label>
+          <label><input type="radio" name="alteredPrediction" value="attack-fails" required> Attack fails</label>
+        </fieldset>
+        <label for="altered-reasoning">Explain which changed fact controls.</label>
+        <textarea id="altered-reasoning" name="alteredReasoning" rows="3" maxlength="1200" required></textarea>
+        <button class="button green" type="submit">Save revision and continue</button>
+      </form>
+    `;
+  } else {
+    els["learning-cycle-output"].innerHTML = `
+      <span class="status-pill">Cycle complete</span>
+      <h2>${escapeHtml(cycle.attackTitle)} debrief saved</h2>
+      <p><strong>Initial:</strong> ${escapeHtml(predictionLabel(cycle.initial.prediction))}. ${escapeHtml(cycle.initial.reasoning)}</p>
+      <p><strong>Ruling:</strong> ${escapeHtml(cycle.ruling.label)}. ${escapeHtml(cycle.ruling.body)}</p>
+      <p><strong>Revision:</strong> ${escapeHtml(cycle.revision)}</p>
+      <p><strong>Altered fact:</strong> ${escapeHtml(predictionLabel(cycle.alteredPrediction.prediction))}. ${escapeHtml(cycle.alteredPrediction.reasoning)}</p>
+    `;
+  }
+
+  els["learning-cycle-output"].querySelector("[data-learning-form='prediction']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitInitialPrediction(event.currentTarget);
+  });
+  els["learning-cycle-output"].querySelector("[data-learning-form='revision']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitLearningRevision(event.currentTarget);
+  });
+  els["learning-cycle-output"].querySelector("[data-action='stand-on-prediction']")?.addEventListener("click", standOnPrediction);
+}
+
+function authorityTypeLabel(type) {
+  const labels = {
+    "primary-rule": "Primary rule",
+    "primary-statute": "Primary statute",
+    "primary-case": "Primary case"
+  };
+  return labels[type] || "Authority";
 }
 
 function renderClaimHand() {
   els["claim-hand"].innerHTML = state.hands.claims.map((claim) => `
-    <button class="playing-card ${state.activeCase?.id === claim.id ? "selected" : ""}" ${state.phase !== "claim" ? "disabled" : ""} data-action="file-claim" data-id="${claim.instanceId}">
+    <button class="playing-card ${state.activeCase?.id === claim.id ? "selected" : ""}" ${state.phase !== "claim" ? "disabled" : ""} data-action="file-claim" data-id="${escapeHtml(claim.instanceId)}">
       <span class="card-type">Claim</span>
-      <h3>${claim.title}</h3>
-      <p>${claim.summary}</p>
+      <h3>${escapeHtml(claim.title)}</h3>
+      <p>${escapeHtml(claim.summary)}</p>
       <div class="card-meta">
-        <span class="tag">${claim.plaintiff.state} plaintiff</span>
-        <span class="tag">${claim.forumState} ${claim.court}</span>
-        <span class="tag">${formatMoney(claim.amount)}</span>
+        <span class="tag">${escapeHtml(claim.plaintiff.state)} plaintiff</span>
+        <span class="tag">${escapeHtml(claim.forumState)} ${escapeHtml(claim.court)}</span>
+        <span class="tag">${escapeHtml(formatMoney(claim.amount))}</span>
       </div>
     </button>
   `).join("");
@@ -1313,43 +1636,43 @@ function renderActiveCase() {
   els["active-case"].innerHTML = `
     <div class="case-facts">
       <span class="section-label">Active claim</span>
-      <h2>${c.title}</h2>
-      <p>${c.summary}</p>
+      <h2>${escapeHtml(c.title)}</h2>
+      <p>${escapeHtml(c.summary)}</p>
       <dl>
-        <div><dt>Plaintiff</dt><dd>${c.plaintiff.name} (${c.plaintiff.state})</dd></div>
-        <div><dt>Forum</dt><dd>${c.currentForum || c.forumState} ${c.currentCourt || c.court}</dd></div>
-        <div><dt>Amount</dt><dd>${formatMoney(c.amount)}</dd></div>
-        <div><dt>Claim</dt><dd>${c.type}</dd></div>
+        <div><dt>Plaintiff</dt><dd>${escapeHtml(c.plaintiff.name)} (${escapeHtml(c.plaintiff.state)})</dd></div>
+        <div><dt>Forum</dt><dd>${escapeHtml(c.currentForum || c.forumState)} ${escapeHtml(c.currentCourt || c.court)}</dd></div>
+        <div><dt>Amount</dt><dd>${escapeHtml(formatMoney(c.amount))}</dd></div>
+        <div><dt>Claim</dt><dd>${escapeHtml(c.type)}</dd></div>
       </dl>
-      <p>${c.venueFacts}</p>
-      ${c.supplementalClaim ? `<p><strong>Supplemental claim:</strong> ${c.supplementalClaim.title}</p>` : ""}
+      <p>${escapeHtml(c.venueFacts)}</p>
+      ${c.supplementalClaim ? `<p><strong>Supplemental claim:</strong> ${escapeHtml(c.supplementalClaim.title)}</p>` : ""}
       <div class="defendant-options">
         ${c.defendants.map((option) => `
-          <button class="option-button ${d?.id === option.id ? "selected" : ""}" ${state.phase !== "defendant" ? "disabled" : ""} data-action="choose-defendant" data-id="${option.id}">
-            <strong>${option.name}</strong>
-            <span>${option.state}${option.ppb && option.ppb !== option.state ? ` / PPB ${option.ppb}` : ""}. ${option.role}</span>
+          <button class="option-button ${d?.id === option.id ? "selected" : ""}" ${state.phase !== "defendant" ? "disabled" : ""} data-action="choose-defendant" data-id="${escapeHtml(option.id)}">
+            <strong>${escapeHtml(option.name)}</strong>
+            <span>${escapeHtml(option.state)}${option.ppb && option.ppb !== option.state ? ` / PPB ${escapeHtml(option.ppb)}` : ""}. ${escapeHtml(option.role)}</span>
           </button>
         `).join("")}
       </div>
       <div class="case-actions">
-        <button class="button blue" data-action="pass-attacks" ${state.phase !== "attack" ? "disabled" : ""}>Pass to discovery</button>
-        <button class="button red" data-action="close-discovery" ${state.phase !== "discovery" ? "disabled" : ""}>Close discovery</button>
-        <button class="button green" data-action="next-round" ${state.phase !== "trial" || state.sessionComplete ? "disabled" : ""}>${nextRoundLabel}</button>
+        <button class="button blue" data-action="pass-attacks" ${state.phase !== "attack" || isLearningActionBlocked() ? "disabled" : ""}>Pass to discovery</button>
+        <button class="button red" data-action="close-discovery" ${state.phase !== "discovery" || isLearningActionBlocked() ? "disabled" : ""}>Close discovery</button>
+        <button class="button green" data-action="next-round" ${state.phase !== "trial" || state.sessionComplete || isLearningActionBlocked() ? "disabled" : ""}>${nextRoundLabel}</button>
       </div>
     </div>
     <div class="case-docket">
       <span class="section-label">Docket</span>
       ${status ? `
         <div class="status-grid">
-          <div><span>Diversity</span><strong>${status.diversity}</strong></div>
-          <div><span>Federal SMJ</span><strong>${status.smj}</strong></div>
-          <div><span>PJ contacts</span><strong>${status.pj}</strong></div>
-          <div><span>Service</span><strong>${status.service}</strong></div>
-          <div><span>Removal</span><strong>${status.removal}</strong></div>
-          <div><span>Supp. Jx</span><strong>${status.supplemental}</strong></div>
+          <div><span>Diversity</span><strong>${escapeHtml(status.diversity)}</strong></div>
+          <div><span>Federal SMJ</span><strong>${escapeHtml(status.smj)}</strong></div>
+          <div><span>PJ contacts</span><strong>${escapeHtml(status.pj)}</strong></div>
+          <div><span>Service</span><strong>${escapeHtml(status.service)}</strong></div>
+          <div><span>Removal</span><strong>${escapeHtml(status.removal)}</strong></div>
+          <div><span>Supp. Jx</span><strong>${escapeHtml(status.supplemental)}</strong></div>
         </div>
       ` : ""}
-      <ul class="docket-list">${state.docket.map((entry) => `<li><strong>${escapeHtml(entry.title)}</strong>${escapeHtml(entry.detail)}</li>`).join("")}</ul>
+      <ul class="docket-list" tabindex="0" aria-label="Case docket">${state.docket.map((entry) => `<li><strong>${escapeHtml(entry.title)}</strong>${escapeHtml(entry.detail)}</li>`).join("")}</ul>
     </div>
   `;
   els["active-case"].querySelectorAll("[data-action='choose-defendant']").forEach((button) => button.addEventListener("click", () => chooseDefendant(button.dataset.id)));
@@ -1359,14 +1682,14 @@ function renderActiveCase() {
 }
 
 function renderAttackHand() {
-  els["draw-attack-button"].disabled = state.hands.attacks.length >= HAND_LIMITS.attacks;
+  els["draw-attack-button"].disabled = state.hands.attacks.length >= HAND_LIMITS.attacks || isLearningActionBlocked();
   els["attack-hand"].innerHTML = state.hands.attacks.map((card) => {
     const disabled = !canPlayAttack(card) || !canAfford("defense", card.cost);
     return `
-      <button class="playing-card" ${disabled ? "disabled" : ""} data-action="attack" data-id="${card.instanceId}">
-        <span class="card-type attack">${card.title}</span>
-        <h3>${card.subtitle}</h3>
-        <p>${card.text}</p>
+      <button class="playing-card" ${disabled ? "disabled" : ""} data-action="attack" data-id="${escapeHtml(card.instanceId)}">
+        <span class="card-type attack">${escapeHtml(card.title)}</span>
+        <h3>${escapeHtml(card.subtitle)}</h3>
+        <p>${escapeHtml(card.text)}</p>
         <div class="card-meta"><span class="tag">${card.timing === "summary" ? "After discovery" : "Threshold"}</span><span class="tag">${card.cost} budget</span></div>
       </button>
     `;
@@ -1380,15 +1703,15 @@ function renderMotionHand() {
     const isMotion = card.kind === "motion";
     const isDiscoveryAnswer = card.kind === "discovery";
     const disabled = isMotion
-      ? state.phase !== "response" || !canAfford("plaintiff", card.cost)
+      ? state.phase !== "response" || state.learningCycle.current?.stage !== "response" || !canAfford("plaintiff", card.cost)
       : isDiscoveryAnswer
         ? !hasPendingDiscoveryResistance() || !canAfford("plaintiff", card.cost)
         : state.phase !== "discovery" || !canAfford("plaintiff", card.cost);
     return `
-      <button class="playing-card" ${disabled ? "disabled" : ""} data-action="${isMotion ? "motion" : isDiscoveryAnswer ? "discovery-response" : "tool"}" data-id="${card.instanceId}">
+      <button class="playing-card" ${disabled ? "disabled" : ""} data-action="${isMotion ? "motion" : isDiscoveryAnswer ? "discovery-response" : "tool"}" data-id="${escapeHtml(card.instanceId)}">
         <span class="card-type ${isMotion ? "motion" : "discovery"}">${isMotion ? "Motion" : "Discovery"}</span>
-        <h3>${card.title}</h3>
-        <p>${card.text}</p>
+        <h3>${escapeHtml(card.title)}</h3>
+        <p>${escapeHtml(card.text)}</p>
         <div class="card-meta"><span class="tag">${card.cost} budget</span></div>
       </button>
     `;
@@ -1409,12 +1732,12 @@ function renderDiscovery() {
     return `
       <article class="evidence-item ${complete ? "complete" : ""}">
         <span class="card-type discovery">${complete ? "Collected" : pending ? "Objected" : "Needed"}</span>
-        <h3>${item.title}</h3>
-        <p>${item.description}</p>
-        <div class="card-meta"><span class="tag">${toolName(item.tool)}</span>${item.resistance ? `<span class="tag">${resistanceLabel(item.resistance)}</span>` : ""}</div>
+        <h3>${escapeHtml(item.title)}</h3>
+        <p>${escapeHtml(item.description)}</p>
+        <div class="card-meta"><span class="tag">${escapeHtml(toolName(item.tool))}</span>${item.resistance ? `<span class="tag">${escapeHtml(resistanceLabel(item.resistance))}</span>` : ""}</div>
         <div class="case-actions">
           ${tools.map((tool) => `
-            <button class="button secondary" data-action="request-evidence" data-evidence="${item.id}" data-tool="${tool.instanceId}" ${state.phase !== "discovery" || complete || pending || !canAfford("plaintiff", tool.cost) ? "disabled" : ""}>${tool.title}</button>
+            <button class="button secondary" data-action="request-evidence" data-evidence="${escapeHtml(item.id)}" data-tool="${escapeHtml(tool.instanceId)}" ${state.phase !== "discovery" || isLearningActionBlocked() || complete || pending || !canAfford("plaintiff", tool.cost) ? "disabled" : ""}>${escapeHtml(tool.title)}</button>
           `).join("")}
         </div>
       </article>
@@ -1433,7 +1756,7 @@ function renderJudge() {
     <h3>${escapeHtml(state.judge.title)}</h3>
     ${hidden ? `<p>Analysis hidden for exam mode.</p><button class="button secondary" data-action="reveal-ruling">Reveal analysis</button>` : `
       <p>${state.settings.showExplanations ? escapeHtml(state.judge.body) : "Ruling recorded. Enable explanations to show the full rule note."}</p>
-      ${state.settings.showExplanations ? `<p><strong>Source hook:</strong> ${escapeHtml(state.judge.cite)}</p>` : ""}
+      ${state.settings.showExplanations && state.judge.proposition ? `<p><strong>Supported proposition:</strong> ${escapeHtml(state.judge.proposition)}</p>` : ""}
     `}
   `;
   els["judge-output"].querySelector("[data-action='reveal-ruling']")?.addEventListener("click", () => {
@@ -1446,7 +1769,7 @@ function renderAssessment() {
   const assessment = state.lastAssessment;
   if (!assessment) {
     els["assessment-output"].innerHTML = `
-      <p>Complete a round to generate doctrines triggered, wrong motions, outcome, missing proof, and source hooks.</p>
+      <p>Complete a round to generate doctrines triggered, wrong motions, outcome, missing proof, and governing authority IDs.</p>
     `;
     return;
   }
@@ -1468,9 +1791,37 @@ function renderAssessment() {
       : `<p>None recorded.</p>`}
     <h4>Missing proof at outcome</h4>
     ${renderCompactList(assessment.missingProofItems.map((item) => item.title), "Every listed proof item was collected.")}
-    <h4>Source hooks</h4>
-    ${renderCompactList(assessment.sourceHooks, "No source hook was recorded.")}
+    <h4>Missed doctrines</h4>
+    ${renderCompactList(assessment.missedDoctrines || [], "Every committed prediction matched its ruling.")}
+    <h4>Review next</h4>
+    ${renderCompactList(assessment.reviewTopics || [], "No additional review topic was flagged.")}
+    <h4>Governing authorities</h4>
+    ${renderAssessmentAuthorities(assessment.sourceHooks)}
+    <h4>Prediction and revision trail</h4>
+    ${renderLearningDebrief(assessment.learningCycles || [])}
   `;
+}
+
+function renderAssessmentAuthorities(authorityIds) {
+  const sources = normalizeAuthorityIds(authorityIds)
+    .map((id) => AUTHORITY_BY_ID.get(id))
+    .filter(Boolean);
+  return sources.length
+    ? `<ul>${sources.map((source) => `<li><a href="${safeExternalHref(source.officialHref || source.href)}" target="_blank" rel="noreferrer">${escapeHtml(source.label)}</a>, ${escapeHtml(source.pinpoint)}</li>`).join("")}</ul>`
+    : "<p>No governing authority was recorded.</p>";
+}
+
+function renderLearningDebrief(cycles) {
+  if (!cycles.length) return "<p>No contested ruling completed the full learning cycle.</p>";
+  return cycles.map((cycle) => `
+    <details class="learning-debrief">
+      <summary>${escapeHtml(cycle.attackTitle)}: ${cycle.predictionCorrect ? "prediction matched" : "prediction revised"}</summary>
+      <p><strong>Initial:</strong> ${escapeHtml(predictionLabel(cycle.initial?.prediction))}. ${escapeHtml(cycle.initial?.reasoning)}</p>
+      <p><strong>Ruling:</strong> ${escapeHtml(cycle.ruling?.label)}. ${escapeHtml(cycle.ruling?.body)}</p>
+      <p><strong>Revision:</strong> ${escapeHtml(cycle.revision)}</p>
+      <p><strong>Altered fact:</strong> ${escapeHtml(cycle.alteredFactPrompt)} ${escapeHtml(predictionLabel(cycle.alteredPrediction?.prediction))}. ${escapeHtml(cycle.alteredPrediction?.reasoning)}</p>
+    </details>
+  `).join("");
 }
 
 function renderPlaytestStats() {
@@ -1538,11 +1889,11 @@ function printCaseCard(card) {
   return `
     <article class="print-card">
       <span>Claim</span>
-      <h3>${card.title}</h3>
-      <p>${card.summary}</p>
-      <p><strong>Forum:</strong> ${card.forumState} ${card.court}</p>
-      <p><strong>Amount:</strong> ${formatMoney(card.amount)}</p>
-      <p><strong>Proof:</strong> ${card.evidence.map((item) => item.title).join("; ")}</p>
+      <h3>${escapeHtml(card.title)}</h3>
+      <p>${escapeHtml(card.summary)}</p>
+      <p><strong>Forum:</strong> ${escapeHtml(card.forumState)} ${escapeHtml(card.court)}</p>
+      <p><strong>Amount:</strong> ${escapeHtml(formatMoney(card.amount))}</p>
+      <p><strong>Proof:</strong> ${card.evidence.map((item) => escapeHtml(item.title)).join("; ")}</p>
     </article>
   `;
 }
@@ -1550,36 +1901,17 @@ function printCaseCard(card) {
 function printRuleCard(card, type) {
   return `
     <article class="print-card">
-      <span>${type}</span>
-      <h3>${card.title}</h3>
-      <h4>${card.subtitle || card.kind}</h4>
-      <p>${card.text}</p>
+      <span>${escapeHtml(type)}</span>
+      <h3>${escapeHtml(card.title)}</h3>
+      <h4>${escapeHtml(card.subtitle || card.kind)}</h4>
+      <p>${escapeHtml(card.text)}</p>
       <p><strong>Cost:</strong> ${card.cost || 0}</p>
     </article>
   `;
 }
 
-function showRuleTests() {
-  const result = runRuleTests();
-  const body = result.failures.length
-    ? `${result.passed}/${result.total} rule tests passed. Failing: ${result.failures.join("; ")}`
-    : `${result.passed}/${result.total} rule tests passed.`;
-  setJudge(result.failures.length ? "bad" : "good", "Rule tests complete", body, "Same tests are available with npm test.");
-  renderJudge();
-}
-
 function shuffle(items) {
   return seededShuffle(items, state);
-}
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;"
-  })[character]);
 }
 
 document.addEventListener("DOMContentLoaded", init);

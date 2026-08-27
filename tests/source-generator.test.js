@@ -27,7 +27,11 @@ const keyBackedProviders = SOURCE_PROVIDERS.filter((provider) => provider.envKey
 const noKeyProviders = SOURCE_PROVIDERS.filter((provider) => provider.envKeys.length === 0);
 
 expect(manifest.live === false, "Default source manifest should be non-live.");
-expect(manifest.sourceCards.length === manifest.doctrineSources.length + manifest.providers.length, "Source cards should cover doctrine sources and providers.");
+expect(manifest.schemaVersion === 2, "The source manifest should use the traceable Version 2 schema.");
+expect(manifest.sourceCards.length === manifest.doctrineSources.length, "Ruling source cards should include governing doctrine sources only.");
+expect(manifest.referenceCards.length === manifest.providers.length + 1, "Reference cards should separate providers plus the future-amendment lane.");
+expect(manifest.referenceCards.every((card) => ["provider-metadata", "future-amendment"].includes(card.authorityType)), "Reference cards should be explicitly typed as non-ruling material.");
+expect(manifest.sourceReview.reviewedThrough === "2026-08-27", "The manifest should record the source review date.");
 expect(noKeyProviders.every((provider) => manifest.providers.find((item) => item.id === provider.id)?.configured), "No-key providers should be configured.");
 expect(keyBackedProviders.every((provider) => !manifest.providers.find((item) => item.id === provider.id)?.configured), "Key-backed providers should be unconfigured with blank env.");
 expect(manifest.liveProbes.every((probe) => probe.status === "cataloged"), "Non-live probes should be cataloged without network calls.");

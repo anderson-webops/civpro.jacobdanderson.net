@@ -5,6 +5,7 @@ import {
   DOCTRINE_SOURCES,
   LIVE_PROBES,
   REQUIRED_ENV_KEYS,
+  SOURCE_REVIEW,
   SOURCE_PROVIDERS
 } from "./legal-source-config.js";
 import { hasValue, mergedEnv } from "./load-env.js";
@@ -63,16 +64,18 @@ export async function buildManifest({ env, live, includeRestricted = false }) {
   });
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     live,
     includeRestricted,
     outputMode: live ? "live-probe" : "catalog",
     requiredEnv: REQUIRED_ENV_KEYS,
+    sourceReview: SOURCE_REVIEW,
     providers,
     doctrineSources: DOCTRINE_SOURCES,
     liveProbes: probes,
-    sourceCards: buildSourceCards(providers)
+    sourceCards: buildSourceCards(),
+    referenceCards: buildReferenceCards(providers)
   };
 }
 
@@ -185,22 +188,43 @@ function interpolate(value, env) {
   return String(value).replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, key) => env[key] || "");
 }
 
-export function buildSourceCards(providers) {
+export function buildSourceCards() {
+  return DOCTRINE_SOURCES.map((source) => ({
+    id: source.id,
+    label: source.citation,
+    href: source.href,
+    officialHref: source.officialHref,
+    authorityType: source.authorityType,
+    status: source.status,
+    pinpoint: source.pinpoint,
+    proposition: source.proposition,
+    reviewedThrough: source.reviewedThrough,
+    note: `${source.topic}: ${source.gameUse}`
+  }));
+}
+
+export function buildReferenceCards(providers) {
   const providerCards = providers.map((provider) => ({
+    id: `provider-${provider.id}`,
     label: provider.label,
     href: provider.href,
+    authorityType: "provider-metadata",
+    status: "reference-only",
     note: provider.envKeys.length
       ? `${provider.gameUse} ${provider.configured ? "Configured" : `Needs ${provider.missingEnv.join(", ")}.`}`
       : provider.gameUse
   }));
-
-  const doctrineCards = DOCTRINE_SOURCES.map((source) => ({
-    label: source.citation,
-    href: source.href,
-    note: `${source.topic}: ${source.gameUse}`
-  }));
-
-  return [...doctrineCards, ...providerCards];
+  return [
+    ...providerCards,
+    {
+      id: "future-pending-frcp-amendments",
+      label: "Pending FRCP amendments",
+      href: SOURCE_REVIEW.pendingAmendmentsHref,
+      authorityType: "future-amendment",
+      status: "not-governing",
+      note: SOURCE_REVIEW.pendingAmendmentsNote
+    }
+  ];
 }
 
 export function writeOutputs(manifest, { outputDir, manifestPath, generatedModulePath }) {
@@ -216,6 +240,7 @@ export function buildGeneratedModule(manifest) {
 export const LEGAL_SOURCE_MANIFEST = ${JSON.stringify(manifest, null, 2)};
 
 export const LEGAL_SOURCE_CARDS = LEGAL_SOURCE_MANIFEST.sourceCards;
+export const LEGAL_REFERENCE_CARDS = LEGAL_SOURCE_MANIFEST.referenceCards;
 `;
 }
 

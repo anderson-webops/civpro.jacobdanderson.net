@@ -41,6 +41,23 @@ if (!Array.isArray(LEGAL_SOURCE_CARDS) || LEGAL_SOURCE_CARDS.length < requiredCi
   failures.push("Generated source cards are missing or too small.");
 }
 
+for (const source of LEGAL_SOURCE_CARDS) {
+  if (!source.id || !source.pinpoint || !source.proposition || !source.officialHref) {
+    failures.push(`Traceability fields are incomplete for ${source.label || "<missing>"}.`);
+  }
+  if (!source.authorityType?.startsWith("primary-") || source.status !== "governing") {
+    failures.push(`${source.label || "<missing>"} is not classified as governing primary authority.`);
+  }
+}
+
+if (LEGAL_SOURCE_MANIFEST.sourceReview?.reviewedThrough !== "2026-08-27") {
+  failures.push("Source review metadata is missing or stale.");
+}
+
+if (!LEGAL_SOURCE_MANIFEST.referenceCards.some((source) => source.authorityType === "future-amendment" && source.status === "not-governing")) {
+  failures.push("Pending amendments should be isolated as non-governing future material.");
+}
+
 if (!LEGAL_SOURCE_MANIFEST.liveProbes.some((probe) => probe.provider === "courtlistener")) {
   failures.push("CourtListener live probe is not configured.");
 }

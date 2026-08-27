@@ -4,14 +4,14 @@
   --surface: #fffefa;
   --surface-strong: #ffffff;
   --ink: #202225;
-  --muted: #696b70;
+  --muted: #5f6267;
   --line: #ded8cc;
   --line-strong: #c9c0af;
-  --green: #2b7a57;
+  --green: #236b4a;
   --green-soft: #dff0e7;
   --red: #a93434;
   --red-soft: #f6dddd;
-  --gold: #b8842c;
+  --gold: #865a15;
   --gold-soft: #f3e5c7;
   --blue: #315f7b;
   --blue-soft: #e2edf2;
@@ -44,7 +44,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -61,8 +62,39 @@ button:disabled {
   opacity: 0.48;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 a {
   color: var(--blue);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(49, 95, 123, 0.34);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 8px;
+  left: 8px;
+  padding: 9px 12px;
+  color: #ffffff;
+  background: var(--blue);
+  border-radius: 7px;
+  font-weight: 800;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 .app-shell {
@@ -271,6 +303,62 @@ h3 {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+
+.learning-cycle {
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(226, 237, 242, 0.88), rgba(255, 254, 250, 0.96));
+  border: 1px solid rgba(49, 95, 123, 0.3);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.learning-cycle > p {
+  color: var(--muted);
+}
+
+.reflection-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.reflection-form fieldset {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+}
+
+.reflection-form legend,
+.reflection-form > label {
+  color: var(--charcoal);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.reflection-form fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reflection-form textarea {
+  width: 100%;
+  padding: 9px;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  resize: vertical;
+}
+
+.reflection-form textarea:focus-visible,
+.reflection-form input:focus-visible {
+  outline: 3px solid rgba(49, 95, 123, 0.28);
+  outline-offset: 2px;
 }
 
 .phase-rail {
@@ -933,6 +1021,58 @@ h3 {
 .source-list li {
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.source-list li p {
+  margin: 5px 0;
+}
+
+.authority-type {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--gold);
+  font-size: 0.66rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.readable-source {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.learning-debrief {
+  margin: 8px 0;
+  padding: 8px;
+  background: var(--blue-soft);
+  border-radius: 6px;
+}
+
+.learning-debrief summary {
+  color: var(--blue);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.site-footer {
+  margin-top: 18px;
+  padding: 16px 18px;
+  color: var(--muted);
+  background: rgba(255, 254, 250, 0.92);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.site-footer p {
+  margin-bottom: 7px;
+  font-size: 0.8rem;
+}
+
+.site-footer p:last-child {
+  margin-bottom: 0;
 }
 
 .source-list a {

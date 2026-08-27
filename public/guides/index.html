@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Searchable Civil Procedure study guides for jurisdiction, pleading, joinder, Erie, discovery, summary judgment, class actions, and exam writing.">
+    <link rel="canonical" href="https://civpro.jacobdanderson.net/guides/">
+    <meta name="theme-color" content="#315f7b">
+    <title>Civ Pro Guide Library | Trial Ready</title>
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="guide.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to guide library</a>
+    <main id="main-content" class="guide-shell library-shell" tabindex="-1">
+      <nav class="guide-nav" aria-label="Guide navigation">
+        <a href="../index.html">Game</a>
+        <a href="instructor-guide.html">Instructor guide</a>
+        <a href="student-quickstart.html">Student quickstart</a>
+        <a href="lesson-plans.html">Lesson plans</a>
+      </nav>
+
+      <header>
+        <p class="eyeline">Civ Pro: Trial Ready</p>
+        <h1>Guide Library</h1>
+        <p class="lede">Eight source-linked guides connect the game’s procedural choices to governing rules, cases, course framing, exam strategy, and transfer practice.</p>
+        <div class="callout">
+          <strong>Educational boundary.</strong> These materials are a simplified study aid, not legal advice. Verify governing text and follow your professor’s framing for graded work.
+        </div>
+      </header>
+
+      <section class="library-controls" aria-labelledby="find-guides-title">
+        <h2 id="find-guides-title">Find a guide</h2>
+        <label for="guide-search">Search titles, rules, cases, strategies, and hypotheticals</label>
+        <input id="guide-search" type="search" autocomplete="off" placeholder="Try removal, Rule 56, or Erie">
+        <label for="guide-category">Category</label>
+        <select id="guide-category"></select>
+        <p id="guide-result-count" class="result-count" aria-live="polite"></p>
+      </section>
+
+      <section id="guide-results" class="guide-results" aria-label="Civil Procedure guides"></section>
+
+      <section id="source-policy" aria-labelledby="source-policy-title">
+        <h2 id="source-policy-title">Source policy</h2>
+        <p id="source-review-note"></p>
+        <div id="source-policy-groups" class="source-policy-grid"></div>
+      </section>
+
+      <footer class="library-footer">
+        <p>Privacy: searches, guide choices, game autosaves, and playtest signals remain in this browser. This static site has no account, analytics, or server submission endpoint.</p>
+        <p id="library-version"></p>
+      </footer>
+    </main>
+    <script type="module" src="library.js"></script>
+  </body>
+</html>

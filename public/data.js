@@ -1,7 +1,17 @@
-import { LEGAL_SOURCE_CARDS } from "./legal-sources.generated.js";
+import { LEGAL_REFERENCE_CARDS, LEGAL_SOURCE_CARDS, LEGAL_SOURCE_MANIFEST } from "./legal-sources.generated.js";
 import { REVIEWED_CASES, REVIEWED_SOURCE_CARDS } from "./game-artifacts.generated.js";
 
-export const SOURCES = [...LEGAL_SOURCE_CARDS, ...REVIEWED_SOURCE_CARDS];
+export const SOURCES = LEGAL_SOURCE_CARDS;
+export const SOURCE_REFERENCES = [
+  ...LEGAL_REFERENCE_CARDS,
+  ...REVIEWED_SOURCE_CARDS.map((source, index) => ({
+    id: `reviewed-provider-lane-${index + 1}`,
+    authorityType: "provider-metadata",
+    status: "reference-only",
+    ...source
+  }))
+];
+export const LEGAL_SOURCE_REVIEW = LEGAL_SOURCE_MANIFEST.sourceReview;
 
 export const PHASES = [
   ["claim", "File Claim"],

@@ -106,183 +106,167 @@ export const SOURCE_PROVIDERS = [
   }
 ];
 
+const FRCP_OFFICIAL = "https://www.uscourts.gov/forms-rules/current-rules-practice-procedure/federal-rules-civil-procedure";
+const REVIEWED_THROUGH = "2026-08-27";
+const houseCodeUrl = (section) => `https://uscode.house.gov/view.xhtml?req=%28title%3A28+section%3A${section}+edition%3Aprelim%29`;
+
+export const SOURCE_REVIEW = {
+  contentVersion: "2026-08-27.1",
+  reviewedThrough: REVIEWED_THROUGH,
+  currentRulesNote: "Current Federal Rules of Civil Procedure page reviewed; the rules page reports rules last amended in 2025.",
+  currentRulesHref: FRCP_OFFICIAL,
+  pendingAmendmentsNote: "The August 2026 preliminary draft includes proposed civil amendments for a later effective date. Proposed text is not treated as governing law in the simulator.",
+  pendingAmendmentsHref: "https://www.uscourts.gov/forms-rules/pending-rules-and-forms-amendments"
+};
+
+const ruleSource = (number, topic, pinpoint, proposition, gameUse) => ({
+  id: `frcp-${number}`,
+  citation: `FRCP ${number}`,
+  provider: "cornell-lii",
+  authorityType: "primary-rule",
+  status: "governing",
+  href: `https://www.law.cornell.edu/rules/frcp/rule_${number}`,
+  officialHref: FRCP_OFFICIAL,
+  topic,
+  pinpoint,
+  proposition,
+  gameUse,
+  reviewedThrough: REVIEWED_THROUGH
+});
+
+const statuteSource = (section, topic, pinpoint, proposition, gameUse) => ({
+  id: `usc-28-${section}`,
+  citation: `28 U.S.C. ${section}`,
+  provider: "cornell-lii",
+  authorityType: "primary-statute",
+  status: "governing",
+  href: `https://www.law.cornell.edu/uscode/text/28/${section}`,
+  officialHref: houseCodeUrl(section),
+  topic,
+  pinpoint,
+  proposition,
+  gameUse,
+  reviewedThrough: REVIEWED_THROUGH
+});
+
+const caseSource = (id, citation, officialHref, readableHref, topic, pinpoint, proposition, gameUse) => ({
+  id,
+  citation,
+  provider: "library-of-congress",
+  authorityType: "primary-case",
+  status: "governing",
+  href: readableHref,
+  officialHref,
+  topic,
+  pinpoint,
+  proposition,
+  gameUse,
+  reviewedThrough: REVIEWED_THROUGH
+});
+
 export const DOCTRINE_SOURCES = [
-  {
-    id: "frcp-4",
-    citation: "FRCP 4",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_4",
-    topic: "Service of process",
-    gameUse: "Service challenge cards, cure-service motions, and waiver timing."
-  },
-  {
-    id: "frcp-8",
-    citation: "FRCP 8",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_8",
-    topic: "Pleading baseline",
-    gameUse: "Plausibility and complaint-sufficiency tuning for Rule 12(b)(6)."
-  },
-  {
-    id: "frcp-12",
-    citation: "FRCP 12",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_12",
-    topic: "Threshold defenses and waiver",
-    gameUse: "Attack timing, motion-response windows, and waived defenses."
-  },
-  {
-    id: "frcp-13",
-    citation: "FRCP 13",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_13",
-    topic: "Counterclaims and crossclaims",
-    gameUse: "Future expansion for compulsory counterclaim pressure."
-  },
-  {
-    id: "frcp-14",
-    citation: "FRCP 14",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_14",
-    topic: "Third-party practice",
-    gameUse: "Impleader attack and party-complication cards."
-  },
-  {
-    id: "frcp-15",
-    citation: "FRCP 15",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_15",
-    topic: "Amended and supplemental pleadings",
-    gameUse: "Leave-to-amend counters to pleading attacks."
-  },
-  {
-    id: "frcp-18",
-    citation: "FRCP 18",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_18",
-    topic: "Claim joinder",
-    gameUse: "Claim-stacking decisions during case setup."
-  },
-  {
-    id: "frcp-19",
-    citation: "FRCP 19",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_19",
-    topic: "Required joinder of parties",
-    gameUse: "Necessary-party challenge cards."
-  },
-  {
-    id: "frcp-20",
-    citation: "FRCP 20",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_20",
-    topic: "Permissive party joinder",
-    gameUse: "Join-party cards that can help or hurt jurisdiction."
-  },
-  {
-    id: "frcp-23",
-    citation: "FRCP 23",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_23",
-    topic: "Class actions",
-    gameUse: "Preview class-certification module."
-  },
-  {
-    id: "frcp-26",
-    citation: "FRCP 26",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_26",
-    topic: "Discovery scope and disclosures",
-    gameUse: "Discovery checklist, proportionality pressure, and expert proof."
-  },
-  {
-    id: "frcp-30",
-    citation: "FRCP 30",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_30",
-    topic: "Depositions",
-    gameUse: "Deposition discovery cards."
-  },
-  {
-    id: "frcp-34",
-    citation: "FRCP 34",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_34",
-    topic: "Requests for production",
-    gameUse: "Document-request discovery cards."
-  },
-  {
-    id: "frcp-36",
-    citation: "FRCP 36",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_36",
-    topic: "Requests for admission",
-    gameUse: "Admission and narrowing cards."
-  },
-  {
-    id: "frcp-37",
-    citation: "FRCP 37",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_37",
-    topic: "Discovery sanctions and motions to compel",
-    gameUse: "Motion-to-compel and sanction response cards."
-  },
-  {
-    id: "frcp-56",
-    citation: "FRCP 56",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/rules/frcp/rule_56",
-    topic: "Summary judgment",
-    gameUse: "End-of-discovery attack when proof elements remain missing."
-  },
-  {
-    id: "usc-28-1331",
-    citation: "28 U.S.C. 1331",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/uscode/text/28/1331",
-    topic: "Federal question jurisdiction",
-    gameUse: "Federal-question case cards and supplemental-jurisdiction anchors."
-  },
-  {
-    id: "usc-28-1332",
-    citation: "28 U.S.C. 1332",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/uscode/text/28/1332",
-    topic: "Diversity jurisdiction",
-    gameUse: "Complete-diversity and amount-in-controversy checks."
-  },
-  {
-    id: "usc-28-1367",
-    citation: "28 U.S.C. 1367",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/uscode/text/28/1367",
-    topic: "Supplemental jurisdiction",
-    gameUse: "Tagalong claim cards and supplemental-jurisdiction attacks."
-  },
-  {
-    id: "usc-28-1391",
-    citation: "28 U.S.C. 1391",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/uscode/text/28/1391",
-    topic: "Venue",
-    gameUse: "Improper-venue and transfer cards."
-  },
-  {
-    id: "usc-28-1441",
-    citation: "28 U.S.C. 1441",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/uscode/text/28/1441",
-    topic: "Removal",
-    gameUse: "Removal attack, forum-defendant rule, and remand counterplay."
-  },
-  {
-    id: "usc-28-1446",
-    citation: "28 U.S.C. 1446",
-    provider: "cornell-lii",
-    href: "https://www.law.cornell.edu/uscode/text/28/1446",
-    topic: "Removal procedure",
-    gameUse: "Removal-deadline and procedural-defect variants."
-  }
+  ruleSource("4", "Service of process", "Rule 4(c), (e), (h), and (m)", "Rule 4 governs service of process and the time for service.", "Service challenges and cure-service responses."),
+  ruleSource("8", "Pleading baseline", "Rule 8(a)", "A complaint must contain a short and plain statement of jurisdiction, claim, and requested relief.", "Complaint-sufficiency analysis."),
+  ruleSource("12", "Threshold defenses and waiver", "Rule 12(b), (g), and (h)", "Rule 12 identifies threshold defenses and controls consolidation and waiver of waivable defenses.", "Attack timing, motion responses, and waiver."),
+  ruleSource("13", "Counterclaims and crossclaims", "Rule 13(a), (b), and (g)", "Rule 13 distinguishes compulsory and permissive counterclaims and authorizes qualifying crossclaims.", "Future counterclaim expansion."),
+  ruleSource("14", "Third-party practice", "Rule 14(a)", "Rule 14 governs when a defending party may bring in a nonparty who may be liable for all or part of the claim.", "Future impleader expansion."),
+  ruleSource("15", "Amended and supplemental pleadings", "Rule 15(a) and (c)", "Rule 15 governs amendment and relation back.", "Leave-to-amend responses."),
+  ruleSource("18", "Claim joinder", "Rule 18(a)", "A party asserting a claim may join as many claims as it has against an opposing party.", "Claim-stacking decisions."),
+  ruleSource("19", "Required party joinder", "Rule 19(a) and (b)", "Rule 19 identifies required parties and the consequences when joinder is not feasible.", "Required-party analysis."),
+  ruleSource("20", "Permissive party joinder", "Rule 20(a)", "Parties may be joined when claims arise from the same transaction or occurrence and share a common question.", "Party-joinder cards."),
+  ruleSource("23", "Class actions", "Rule 23(a) and (b)", "A class must satisfy Rule 23(a) and fit at least one Rule 23(b) category.", "Class-certification preview."),
+  ruleSource("26", "Discovery scope and disclosures", "Rule 26(a), (b)(1), and (b)(5)", "Discovery must be relevant, nonprivileged, and proportional, with specified disclosure and privilege procedures.", "Discovery scope, objections, and expert proof."),
+  ruleSource("30", "Depositions", "Rule 30(a) and (b)", "Rule 30 governs oral depositions and notice.", "Deposition discovery cards."),
+  ruleSource("34", "Requests for production", "Rule 34(a) and (b)", "Rule 34 governs requests for documents, ESI, tangible things, and property inspection.", "Production-request cards."),
+  ruleSource("36", "Requests for admission", "Rule 36(a) and (b)", "Rule 36 permits requests to admit and gives admissions conclusive effect in the action unless withdrawn or amended.", "Admission and narrowing cards."),
+  ruleSource("37", "Discovery enforcement", "Rule 37(a) and (b)", "Rule 37 governs motions to compel and sanctions for discovery failures.", "Motions to compel and sanctions responses."),
+  ruleSource("56", "Summary judgment", "Rule 56(a) and (c)", "Summary judgment depends on the cited record and the absence of a genuine dispute of material fact.", "End-of-discovery Rule 56 attacks."),
+  statuteSource("1331", "Federal-question jurisdiction", "Section 1331", "District courts have original jurisdiction over civil actions arising under federal law.", "Federal-question cases and anchor claims."),
+  statuteSource("1332", "Diversity jurisdiction", "Section 1332(a)", "Diversity jurisdiction requires qualifying citizenship and an amount in controversy exceeding $75,000.", "Complete-diversity and amount checks."),
+  statuteSource("1367", "Supplemental jurisdiction", "Section 1367(a) and (b)", "Supplemental jurisdiction generally extends to related claims within the same Article III case, subject to statutory limits.", "Tagalong-claim analysis."),
+  statuteSource("1391", "Venue", "Section 1391(b) and (c)", "Section 1391 supplies the general venue rules and entity-residence definitions.", "Venue and transfer decisions."),
+  statuteSource("1441", "Removal", "Section 1441(a) and (b)(2)", "Removal requires original federal jurisdiction, and the forum-defendant restriction applies only when removal is based solely on diversity.", "Removal, forum-defendant, and remand play."),
+  statuteSource("1446", "Removal procedure", "Section 1446(a), (b), and (c)", "Section 1446 governs the notice, timing, and specified procedures for removal.", "Removal timing variants."),
+  caseSource(
+    "case-international-shoe",
+    "International Shoe Co. v. Washington, 326 U.S. 310 (1945)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep326/usrep326310/usrep326310.pdf",
+    "https://www.law.cornell.edu/supremecourt/text/326/310",
+    "Personal jurisdiction",
+    "326 U.S. at 316-19",
+    "Due process permits personal jurisdiction when forum contacts make suit consistent with traditional notions of fair play and substantial justice.",
+    "Personal-jurisdiction attacks."
+  ),
+  caseSource(
+    "case-erie",
+    "Erie Railroad Co. v. Tompkins, 304 U.S. 64 (1938)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep304/usrep304064/usrep304064.pdf",
+    "https://www.law.cornell.edu/supremecourt/text/304/64",
+    "Erie doctrine",
+    "304 U.S. at 78-80",
+    "Federal courts exercising diversity jurisdiction apply state substantive law.",
+    "Erie preview rulings."
+  ),
+  caseSource(
+    "case-hanna",
+    "Hanna v. Plumer, 380 U.S. 460 (1965)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep380/usrep380460/usrep380460.pdf",
+    "https://www.law.cornell.edu/supremecourt/text/380/460",
+    "Erie and federal rules",
+    "380 U.S. at 469-74",
+    "A valid Federal Rule governs when it directly addresses the procedural issue within the Rules Enabling Act and constitutional bounds.",
+    "Erie guide analysis."
+  ),
+  caseSource(
+    "case-mottley",
+    "Louisville & Nashville Railroad Co. v. Mottley, 211 U.S. 149 (1908)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep211/usrep211149/usrep211149.pdf",
+    "https://www.law.cornell.edu/supremecourt/text/211/149",
+    "Federal-question jurisdiction",
+    "211 U.S. at 152-54",
+    "Federal-question jurisdiction ordinarily must appear on the face of the plaintiff's well-pleaded complaint.",
+    "Jurisdiction guide analysis."
+  ),
+  caseSource(
+    "case-gibbs",
+    "United Mine Workers v. Gibbs, 383 U.S. 715 (1966)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep383/usrep383715/usrep383715.pdf",
+    "https://www.law.cornell.edu/supremecourt/text/383/715",
+    "Supplemental jurisdiction",
+    "383 U.S. at 725-27",
+    "Related federal and state claims may form one constitutional case when they share a common nucleus of operative fact.",
+    "Supplemental-jurisdiction guide analysis."
+  ),
+  caseSource(
+    "case-twombly",
+    "Bell Atlantic Corp. v. Twombly, 550 U.S. 544 (2007)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep550/usrep550544/usrep550544.pdf",
+    "https://www.law.cornell.edu/supct/html/05-1126.ZO.html",
+    "Pleading sufficiency",
+    "550 U.S. at 555-70",
+    "A complaint needs enough factual matter to plausibly suggest entitlement to relief, not labels or a formulaic recitation.",
+    "Pleading guide analysis."
+  ),
+  caseSource(
+    "case-celotex",
+    "Celotex Corp. v. Catrett, 477 U.S. 317 (1986)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep477/usrep477317/usrep477317.pdf",
+    "https://www.law.cornell.edu/supremecourt/text/477/317",
+    "Summary judgment",
+    "477 U.S. at 322-25",
+    "A summary-judgment movant may identify an absence of evidence supporting the nonmovant's case.",
+    "Rule 56 guide analysis."
+  ),
+  caseSource(
+    "case-wal-mart",
+    "Wal-Mart Stores, Inc. v. Dukes, 564 U.S. 338 (2011)",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep564/usrep564338/usrep564338.pdf",
+    "https://www.law.cornell.edu/supct/html/10-277.ZO.html",
+    "Class actions",
+    "564 U.S. at 349-60",
+    "Rule 23(a)(2) commonality requires a common contention capable of classwide resolution.",
+    "Class-actions guide analysis."
+  )
 ];
 
 export const LIVE_PROBES = [

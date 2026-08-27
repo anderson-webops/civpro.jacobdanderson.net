@@ -7,7 +7,10 @@ import {
   formatMoney,
   hasCompleteDiversity,
   hasFederalSmj,
+  hasForumDefendant,
+  isRemovalAvailable,
   missingEvidence,
+  removalBasis,
   resistanceLabel,
   statusFacts,
   toolName,
@@ -87,11 +90,30 @@ export function runRuleTests() {
       }
     },
     {
-      name: "joined forum defendant blocks complete diversity",
+      name: "joined same-state defendant breaks complete diversity",
       run: () => {
         const c = caseById("tire-failure");
-        c.joinedForumDefendant = true;
+        c.joinedDefendantIds = ["roadworks"];
         return !hasCompleteDiversity(c, selectedDefendant(c, "tireco"));
+      }
+    },
+    {
+      name: "forum-defendant status does not itself change citizenship analysis",
+      run: () => {
+        const c = caseById("tire-failure");
+        c.plaintiff.state = "KS";
+        c.joinedDefendantIds = ["roadworks"];
+        return hasCompleteDiversity(c, selectedDefendant(c, "tireco"))
+          && hasForumDefendant(c, selectedDefendant(c, "tireco"));
+      }
+    },
+    {
+      name: "procedural removal block does not alter complete diversity",
+      run: () => {
+        const c = caseById("tire-failure");
+        c.removalProcedurallyBlocked = true;
+        const d = selectedDefendant(c, "tireco");
+        return hasCompleteDiversity(c, d) && !isRemovalAvailable(c, d);
       }
     },
     {
@@ -108,7 +130,7 @@ export function runRuleTests() {
     },
     {
       name: "statusFacts reports removal available for removable state case",
-      run: () => statusFacts(caseById("tire-failure"), selectedDefendant(caseById("tire-failure"), "tireco")).removal === "Available"
+      run: () => statusFacts(caseById("tire-failure"), selectedDefendant(caseById("tire-failure"), "tireco")).removal === "Available: diversity"
     },
     {
       name: "statusFacts reports weak personal jurisdiction for out-of-forum defendant",
@@ -180,15 +202,29 @@ export function runRuleTests() {
       run: () => !evalFor("festival-injury", "festival", "remove").hasMerit
     },
     {
+      name: "forum defendant does not block federal-question removal",
+      run: () => evalFor("wage-platform", "local-franchise", "remove", {
+        casePatch: { currentCourt: "state" }
+      }).hasMerit
+    },
+    {
+      name: "federal-question removal basis remains available without diversity",
+      run: () => {
+        const c = caseById("wage-platform");
+        c.currentCourt = "state";
+        const d = selectedDefendant(c, "local-franchise");
+        return removalBasis(c, d) === "federal-question" && isRemovalAvailable(c, d);
+      }
+    },
+    {
       name: "already-federal case cannot be removed again",
       run: () => !evalFor("wage-platform", "deliverly", "remove").hasMerit
     },
     {
-      name: "blockedRemoval flag defeats otherwise available removal",
-      run: () =>
-        !evalFor("tire-failure", "tireco", "remove", {
-          casePatch: { blockedRemoval: true }
-        }).hasMerit
+      name: "explicit procedural restriction can block otherwise available removal",
+      run: () => !evalFor("tire-failure", "tireco", "remove", {
+        casePatch: { removalProcedurallyBlocked: true }
+      }).hasMerit
     },
     {
       name: "join attack has merit when same-transaction forum defendant is available",
@@ -262,8 +298,25 @@ export function runRuleTests() {
           attackCount: 0,
           missingEvidence: missingEvidence(c)
         });
-        return !result.hasMerit && result.source === "Prototype rule engine";
+        return !result.hasMerit && result.authorityIds.length === 0;
       }
+    },
+    {
+      name: "every mapped attack result carries authority IDs and a proposition",
+      run: () => ATTACK_CARDS.every((attack) => {
+        const c = caseById("tire-failure");
+        const result = evaluateAttack({
+          attack,
+          activeCase: c,
+          selectedDefendant: selectedDefendant(c, "tireco"),
+          attackCount: 0,
+          missingEvidence: missingEvidence(c)
+        });
+        return Array.isArray(result.authorityIds)
+          && result.authorityIds.length > 0
+          && typeof result.proposition === "string"
+          && result.proposition.length > 20;
+      })
     },
     {
       name: "missingEvidence returns all incomplete proof items",

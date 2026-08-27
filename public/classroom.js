@@ -1,4 +1,7 @@
-export const SESSION_SCHEMA_VERSION = 1;
+export const APP_VERSION = "0.4.0";
+export const CONTENT_VERSION = "2026-08-27.1";
+export const SOURCE_REVISION = "2026-08-27";
+export const SESSION_SCHEMA_VERSION = 2;
 export const REPLAY_KIND = "civpro-classroom-replay";
 export const PLAYTEST_STATS_SCHEMA_VERSION = 1;
 export const MAX_STORED_ROUNDS = 200;
@@ -54,7 +57,8 @@ export function createRoundMetrics({ round, scenarioPackId, seed, startedAt = Da
     budgetFailures: { plaintiff: 0, defense: 0 },
     wrongMotions: [],
     doctrinesTriggered: [],
-    sourceHooks: []
+    sourceHooks: [],
+    learningCycles: []
   };
 }
 
@@ -74,6 +78,15 @@ export function buildRoundAssessment({ metrics, activeCase, outcome, endedAt = D
     .filter((item) => !item.complete)
     .map((item) => ({ id: item.id, title: item.title }));
   const durationMs = Math.max(0, endedAt - metrics.startedAt);
+  const learningCycles = plainClone(metrics.learningCycles || []);
+  const missedDoctrines = learningCycles
+    .filter((cycle) => cycle.predictionCorrect === false)
+    .map((cycle) => cycle.attackTitle);
+  const reviewTopics = [...new Set([
+    ...missedDoctrines,
+    ...metrics.wrongMotions.map((item) => item.title),
+    ...missingProofItems.map((item) => item.title)
+  ])];
   return {
     schemaVersion: 1,
     round: metrics.round,
@@ -91,6 +104,10 @@ export function buildRoundAssessment({ metrics, activeCase, outcome, endedAt = D
     wrongMotions: plainClone(metrics.wrongMotions),
     missingProofItems,
     sourceHooks: [...metrics.sourceHooks],
+    governingAuthorityIds: [...metrics.sourceHooks],
+    learningCycles,
+    missedDoctrines,
+    reviewTopics,
     attacksPlayed: metrics.attacksPlayed,
     attacksSucceeded: metrics.attacksSucceeded,
     budgetFailures: { ...metrics.budgetFailures },
@@ -132,11 +149,15 @@ export function createSessionSnapshot(state, savedAt = Date.now()) {
     eventLog: state.eventLog,
     roundHistory: state.roundHistory,
     currentRoundMetrics: state.currentRoundMetrics,
-    lastAssessment: state.lastAssessment
+    lastAssessment: state.lastAssessment,
+    pendingRoundOutcome: state.pendingRoundOutcome,
+    learningCycle: state.learningCycle
   };
   return {
     schemaVersion: SESSION_SCHEMA_VERSION,
-    appVersion: "0.3.0",
+    appVersion: APP_VERSION,
+    contentVersion: CONTENT_VERSION,
+    sourceRevision: SOURCE_REVISION,
     savedAt: new Date(savedAt).toISOString(),
     state: plainClone(snapshotState)
   };
@@ -146,7 +167,9 @@ export function validateSessionSnapshot(snapshot, known = {}) {
   const failures = [];
   if (!snapshot || typeof snapshot !== "object") failures.push("Snapshot must be an object.");
   if (snapshot?.schemaVersion !== SESSION_SCHEMA_VERSION) failures.push(`Snapshot schemaVersion must be ${SESSION_SCHEMA_VERSION}.`);
-  if (snapshot?.appVersion !== "0.3.0") failures.push("Snapshot appVersion must be 0.3.0.");
+  if (snapshot?.appVersion !== APP_VERSION) failures.push(`Snapshot appVersion must be ${APP_VERSION}.`);
+  if (snapshot?.contentVersion !== CONTENT_VERSION) failures.push(`Snapshot contentVersion must be ${CONTENT_VERSION}.`);
+  if (snapshot?.sourceRevision !== SOURCE_REVISION) failures.push(`Snapshot sourceRevision must be ${SOURCE_REVISION}.`);
   const savedState = snapshot?.state;
   if (!savedState || typeof savedState !== "object") failures.push("Snapshot state is missing.");
 
@@ -161,6 +184,9 @@ export function validateSessionSnapshot(snapshot, known = {}) {
     if (!Array.isArray(savedState.eventLog) || savedState.eventLog.length > 5000) failures.push("Event log is missing or too large.");
     if (!Array.isArray(savedState.roundHistory) || savedState.roundHistory.length > MAX_STORED_ROUNDS) {
       failures.push("Round history is missing or too large.");
+    }
+    if (!Array.isArray(savedState.learningCycle?.history) || savedState.learningCycle.history.length > 1000) {
+      failures.push("Learning-cycle history is missing or too large.");
     }
     validateKnownId(savedState.scenarioPackId, known.scenarioPackIds, "scenario pack", failures, true);
     validateKnownId(savedState.activeCase?.id, known.caseIds, "active case", failures, true);
@@ -192,8 +218,10 @@ export function createReplayEnvelope(state, scenarioPack, exportedAt = Date.now(
   const snapshot = createSessionSnapshot(state, exportedAt);
   return {
     kind: REPLAY_KIND,
-    schemaVersion: 1,
-    appVersion: "0.3.0",
+    schemaVersion: SESSION_SCHEMA_VERSION,
+    appVersion: APP_VERSION,
+    contentVersion: CONTENT_VERSION,
+    sourceRevision: SOURCE_REVISION,
     exportedAt: new Date(exportedAt).toISOString(),
     reproducibility: {
       scenarioPackId: state.scenarioPackId,
@@ -201,7 +229,7 @@ export function createReplayEnvelope(state, scenarioPack, exportedAt = Date.now(
       seed: state.seed,
       round: state.round,
       phase: state.phase,
-      instructions: "Import this file in Civ Pro: Trial Ready 0.3 to restore the exact saved state. Use the event log to review or repeat the choices from the same seed."
+      instructions: `Import this file in Civ Pro: Trial Ready ${APP_VERSION} to restore the exact saved state. Use the event log and learning cycles to review or repeat the choices from the same seed.`
     },
     snapshot,
     eventLog: plainClone(state.eventLog),
@@ -211,8 +239,8 @@ export function createReplayEnvelope(state, scenarioPack, exportedAt = Date.now(
 
 export function parseReplayEnvelope(value, known = {}) {
   const envelope = typeof value === "string" ? JSON.parse(value) : value;
-  if (envelope?.kind !== REPLAY_KIND || envelope?.schemaVersion !== 1) {
-    throw new Error("This is not a Civ Pro 0.3 classroom replay file.");
+  if (envelope?.kind !== REPLAY_KIND || envelope?.schemaVersion !== SESSION_SCHEMA_VERSION) {
+    throw new Error(`This is not a Civ Pro ${APP_VERSION} classroom replay file.`);
   }
   validateSessionSnapshot(envelope.snapshot, known);
   return envelope;

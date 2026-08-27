@@ -1,4 +1,4 @@
-import { CASES, SOURCES } from "../public/data.js";
+import { CASES, SOURCE_REFERENCES, SOURCES } from "../public/data.js";
 import {
   REVIEWED_CASES,
   REVIEWED_DOCTRINE_CARDS,
@@ -30,7 +30,8 @@ for (const c of REVIEWED_CASES) {
 }
 
 for (const source of REVIEWED_SOURCE_CARDS) {
-  expect(SOURCES.some((item) => item.label === source.label), `${source.label} should appear in the game source list.`);
+  expect(SOURCE_REFERENCES.some((item) => item.label === source.label), `${source.label} should appear in the provider-reference list.`);
+  expect(!SOURCES.some((item) => item.label === source.label), `${source.label} should not be presented as governing authority.`);
 }
 
 if (failures.length) {

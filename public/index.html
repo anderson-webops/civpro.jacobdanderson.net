@@ -3,12 +3,29 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A source-linked Civil Procedure learning game with reproducible classroom scenarios, committed predictions, motion practice, discovery, and debriefs.">
+    <link rel="canonical" href="https://civpro.jacobdanderson.net/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Civ Pro: Trial Ready">
+    <meta property="og:description" content="Practice Civil Procedure through source-linked rulings, committed predictions, procedural responses, and debriefs.">
+    <meta property="og:url" content="https://civpro.jacobdanderson.net/">
+    <meta property="og:image" content="https://civpro.jacobdanderson.net/social-card.png">
+    <meta property="og:image:width" content="1730">
+    <meta property="og:image:height" content="909">
+    <meta property="og:image:alt" content="Civ Pro: Trial Ready, a source-linked Civil Procedure learning game">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Civ Pro: Trial Ready">
+    <meta name="twitter:description" content="Source-linked Civil Procedure practice with reproducible classroom play and debriefs.">
+    <meta name="twitter:image" content="https://civpro.jacobdanderson.net/social-card.png">
+    <meta name="theme-color" content="#315f7b">
     <title>Civ Pro: Trial Ready</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="app-shell">
+    <a class="skip-link" href="#main-content">Skip to game table</a>
+    <main id="main-content" class="app-shell" tabindex="-1">
       <header class="topbar">
         <div>
           <p class="eyeline">1L Civil Procedure Card Game</p>
@@ -35,7 +52,6 @@
           </label>
           <button id="tutorial-button" class="button blue">Tutorial</button>
           <button id="print-button" class="button secondary">Print cards</button>
-          <button id="test-button" class="button secondary">Run tests</button>
           <button id="new-game-button" class="button secondary">New game</button>
         </div>
       </header>
@@ -52,7 +68,7 @@
           <div id="tutorial-panel" class="tutorial-panel"></div>
           <div class="classroom-card">
             <div class="panel-heading">
-              <span class="section-label">Version 0.3 pilot</span>
+              <span class="section-label">Version 0.4 learning release</span>
               <h2>Classroom session</h2>
             </div>
             <label class="field-label" for="scenario-track">Curriculum track</label>
@@ -66,12 +82,15 @@
             <div class="session-actions" aria-label="Session save and replay controls">
               <button id="save-session-button" class="button secondary">Save</button>
               <button id="load-session-button" class="button secondary">Load</button>
+              <button id="resume-autosave-button" class="button blue" hidden>Resume autosave</button>
+              <button id="discard-autosave-button" class="button secondary" hidden>Discard autosave</button>
               <button id="export-replay-button" class="button secondary">Export replay</button>
               <label class="button secondary file-button" for="import-replay-input">Import replay</label>
               <input id="import-replay-input" class="visually-hidden" type="file" accept="application/json,.json">
             </div>
             <p id="session-status" class="session-status" aria-live="polite">Local save and replay controls are ready.</p>
             <nav class="guide-links" aria-label="Classroom pilot guides">
+              <a href="guides/index.html" target="_blank">Searchable guide library</a>
               <a href="guides/instructor-guide.html" target="_blank">Instructor guide</a>
               <a href="guides/student-quickstart.html" target="_blank">Student quickstart</a>
               <a href="guides/lesson-plans.html" target="_blank">Lesson plans</a>
@@ -105,6 +124,8 @@
           </div>
 
           <article class="active-case" id="active-case" aria-live="polite"></article>
+
+          <section id="learning-cycle-output" class="learning-cycle" aria-live="polite" aria-atomic="false"></section>
 
           <section class="action-zones">
             <div class="zone defense-zone">
@@ -144,7 +165,7 @@
             <span class="section-label">Rule Judge</span>
             <h2>Current ruling</h2>
           </div>
-          <div id="judge-output" class="judge-output"></div>
+          <div id="judge-output" class="judge-output" aria-live="polite" aria-atomic="true"></div>
           <div class="panel-heading sources-heading">
             <span class="section-label">Instructor assessment</span>
             <h2>Post-round evidence</h2>
@@ -165,6 +186,13 @@
       </section>
 
       <section id="print-deck" class="print-deck" aria-label="Printable card deck"></section>
+
+      <footer class="site-footer">
+        <p><strong>Educational simulation:</strong> This site is a simplified 1L study aid, not legal advice or a substitute for the governing text, assigned cases, or course instructions.</p>
+        <p><strong>Sources reviewed through August 27, 2026.</strong> Current evaluator logic uses governing sources only. The August 2026 proposed-amendments package is tracked as non-governing future material.</p>
+        <p><strong>Privacy:</strong> No account, analytics, or server submission endpoint is used. Autosaves, replay data, and playtest signals remain in this browser unless you export a file.</p>
+        <p><a href="guides/index.html#source-policy">Review the guide and source policy</a></p>
+      </footer>
     </main>
 
     <script type="module" src="app.js"></script>

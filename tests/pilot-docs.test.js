@@ -17,6 +17,7 @@ function expect(condition, message) {
 for (const filename of ["instructor-guide.html", "student-quickstart.html", "lesson-plans.html"]) {
   expect(index.includes(`guides/${filename}`), `The game should link to ${filename}.`);
 }
+expect(index.includes("guides/index.html"), "The game should link to the searchable guide library.");
 
 for (const [name, html] of Object.entries(guides)) {
   expect(/<title>[^<]+<\/title>/.test(html), `${name} guide should have a document title.`);
@@ -24,6 +25,8 @@ for (const [name, html] of Object.entries(guides)) {
   expect(/<nav\b[^>]*aria-label=/.test(html), `${name} guide should have labeled guide navigation.`);
   expect(html.includes('href="guide.css"'), `${name} guide should use the printable guide stylesheet.`);
   expect(html.includes("favicon.svg"), `${name} guide should use the site favicon.`);
+  expect(html.includes("skip-link"), `${name} guide should provide a skip link.`);
+  expect(html.includes('href="index.html"'), `${name} guide should link to the searchable library.`);
 }
 
 expect(guideCss.includes("@media print"), "Pilot guides should have print styling.");

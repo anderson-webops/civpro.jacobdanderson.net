@@ -129,3 +129,7 @@ data/legal-sources/cache/
 data/legal-sources/*.local.json
 ops/legal-sources/cache/
 ops/legal-sources/*.local.json
+
+# Reproducible local dependencies and portable build output.
+node_modules/
+dist/
