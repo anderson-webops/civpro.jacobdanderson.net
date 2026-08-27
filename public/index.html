@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Civ Pro: Trial Ready</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -49,6 +50,33 @@
           </div>
           <div id="resource-panel" class="resource-panel"></div>
           <div id="tutorial-panel" class="tutorial-panel"></div>
+          <div class="classroom-card">
+            <div class="panel-heading">
+              <span class="section-label">Version 0.3 pilot</span>
+              <h2>Classroom session</h2>
+            </div>
+            <label class="field-label" for="scenario-track">Curriculum track</label>
+            <select id="scenario-track" class="field-control"></select>
+            <label class="field-label" for="scenario-duration">Class length</label>
+            <select id="scenario-duration" class="field-control"></select>
+            <label class="field-label" for="seed-input">Replay seed</label>
+            <input id="seed-input" class="field-control" type="text" maxlength="80" autocomplete="off">
+            <button id="apply-scenario-button" class="button blue full-width">Apply pack and start</button>
+            <div id="scenario-summary" class="scenario-summary"></div>
+            <div class="session-actions" aria-label="Session save and replay controls">
+              <button id="save-session-button" class="button secondary">Save</button>
+              <button id="load-session-button" class="button secondary">Load</button>
+              <button id="export-replay-button" class="button secondary">Export replay</button>
+              <label class="button secondary file-button" for="import-replay-input">Import replay</label>
+              <input id="import-replay-input" class="visually-hidden" type="file" accept="application/json,.json">
+            </div>
+            <p id="session-status" class="session-status" aria-live="polite">Local save and replay controls are ready.</p>
+            <nav class="guide-links" aria-label="Classroom pilot guides">
+              <a href="guides/instructor-guide.html" target="_blank">Instructor guide</a>
+              <a href="guides/student-quickstart.html" target="_blank">Student quickstart</a>
+              <a href="guides/lesson-plans.html" target="_blank">Lesson plans</a>
+            </nav>
+          </div>
           <div class="settings-card">
             <div class="panel-heading">
               <span class="section-label">Professor mode</span>
@@ -117,6 +145,17 @@
             <h2>Current ruling</h2>
           </div>
           <div id="judge-output" class="judge-output"></div>
+          <div class="panel-heading sources-heading">
+            <span class="section-label">Instructor assessment</span>
+            <h2>Post-round evidence</h2>
+          </div>
+          <div id="assessment-output" class="assessment-output"></div>
+          <div class="panel-heading sources-heading">
+            <span class="section-label">Local-only pilot data</span>
+            <h2>Balance signals</h2>
+          </div>
+          <div id="stats-output" class="stats-output"></div>
+          <button id="clear-stats-button" class="button secondary full-width">Clear local stats</button>
           <div class="panel-heading sources-heading">
             <span class="section-label">Verified hooks</span>
             <h2>Doctrine in play</h2>

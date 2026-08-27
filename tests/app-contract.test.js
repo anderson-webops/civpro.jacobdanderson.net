@@ -27,6 +27,14 @@ expect(app.includes("showRuleTests"), "app.js should keep the in-browser test ru
 expect(app.includes("printCards"), "app.js should keep the print deck hook.");
 expect(app.includes("startTutorial"), "app.js should keep the tutorial hook.");
 expect(app.includes("renderSources"), "app.js should render source cards in the Rule Judge panel.");
+expect(app.includes("SCENARIO_PACKS"), "app.js should load validated classroom scenario packs.");
+expect(app.includes("seededShuffle"), "app.js should use seeded shuffles.");
+expect(!app.includes("Math.random"), "app.js should not use unseeded Math.random shuffles.");
+expect(app.includes("createSessionSnapshot"), "app.js should support save/load snapshots.");
+expect(app.includes("createReplayEnvelope"), "app.js should support replay export.");
+expect(app.includes("renderAssessment"), "app.js should render instructor assessment evidence.");
+expect(app.includes("renderPlaytestStats"), "app.js should render local-only balance signals.");
+expect(app.includes("pack.attackCardIds"), "Printable decks should honor scenario-pack card subsets.");
 
 if (failures.length) {
   console.error("App contract tests failed.");

@@ -1,6 +1,6 @@
 {
   "name": "civ-pro-trial-ready",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,9 +11,10 @@
     "artifacts:candidates": "node scripts/ingest-game-artifacts.js",
     "artifacts:build": "node scripts/build-reviewed-artifacts.js",
     "artifacts:all": "npm run artifacts:candidates && npm run artifacts:build",
+    "scenarios:build": "node scripts/build-scenario-packs.js",
     "pacer:import:dry-run": "node scripts/pacer-direct-import.js --dry-run",
     "pacer:import": "node scripts/pacer-direct-import.js --execute",
-    "test": "node tests/rules.test.js && node tests/data-integrity.test.js && node tests/legal-sources.test.js && node tests/source-generator.test.js && node tests/reviewed-artifacts.test.js && node tests/pacer-direct.test.js && node tests/app-contract.test.js && node tests/app-smoke.test.js",
-    "check": "node --check public/app.js && node --check public/data.js && node --check public/legal-sources.generated.js && node --check public/game-artifacts.generated.js && node --check public/rules.js && node --check public/rule-tests.js && node --check scripts/load-env.js && node --check scripts/legal-source-config.js && node --check scripts/sync-legal-sources.js && node --check scripts/ingest-game-artifacts.js && node --check scripts/build-reviewed-artifacts.js && node --check scripts/pacer-direct-config.js && node --check scripts/pacer-direct-import.js && node --check tests/rules.test.js && node --check tests/data-integrity.test.js && node --check tests/legal-sources.test.js && node --check tests/source-generator.test.js && node --check tests/reviewed-artifacts.test.js && node --check tests/pacer-direct.test.js && node --check tests/app-contract.test.js && node --check tests/app-smoke.test.js"
+    "test": "node tests/rules.test.js && node tests/data-integrity.test.js && node tests/scenario-packs.test.js && node tests/classroom.test.js && node tests/legal-sources.test.js && node tests/source-generator.test.js && node tests/reviewed-artifacts.test.js && node tests/pacer-direct.test.js && node tests/app-contract.test.js && node tests/app-smoke.test.js && node tests/pilot-docs.test.js",
+    "check": "node --check public/app.js && node --check public/data.js && node --check public/classroom.js && node --check public/scenario-packs.generated.js && node --check public/legal-sources.generated.js && node --check public/game-artifacts.generated.js && node --check public/rules.js && node --check public/rule-tests.js && node --check scripts/load-env.js && node --check scripts/legal-source-config.js && node --check scripts/sync-legal-sources.js && node --check scripts/ingest-game-artifacts.js && node --check scripts/build-reviewed-artifacts.js && node --check scripts/build-scenario-packs.js && node --check scripts/pacer-direct-config.js && node --check scripts/pacer-direct-import.js && node --check tests/rules.test.js && node --check tests/data-integrity.test.js && node --check tests/scenario-packs.test.js && node --check tests/classroom.test.js && node --check tests/legal-sources.test.js && node --check tests/source-generator.test.js && node --check tests/reviewed-artifacts.test.js && node --check tests/pacer-direct.test.js && node --check tests/app-contract.test.js && node --check tests/app-smoke.test.js && node --check tests/pilot-docs.test.js"
   }
 }

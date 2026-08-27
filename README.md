@@ -1,6 +1,8 @@
 # Civ Pro: Trial Ready
 
-`Civ Pro: Trial Ready` is a dependency-light browser prototype for a competitive 1L Civil Procedure card game. Version 0.2 turns the first proof of concept into a more usable game system: decks, hands, draw/discard, litigation budget, tutorial mode, printable cards, professor settings, and automated doctrine tests.
+`Civ Pro: Trial Ready` is a dependency-light browser game for formative 1L Civil Procedure practice. Version 0.3 is an instructor-ready classroom pilot with validated lesson packs, reproducible seeded play, exact save and replay, post-round assessment evidence, local-only balance statistics, printable deck subsets, and classroom guides.
+
+This repository is `anderson-webops/civpro.jacobdanderson.net`, with its local checkout at `~/Sites/civpro.jacobdanderson.net`.
 
 ## Run
 
@@ -15,11 +17,56 @@ Then open `http://localhost:4173`.
 ## Test
 
 ```sh
+npm run scenarios:build
 npm test
 npm run check
 ```
 
-The test suite covers rule-engine doctrine branches and edge cases, playable card/deck integrity, generated legal-source data, source generator/env parsing behavior, secret redaction, the static HTML-to-app DOM contract, and a dependency-free app boot smoke test.
+The test suite covers rule-engine doctrine branches and edge cases, playable card and deck integrity, all 15 scenario packs, deterministic play and replay, assessment and playtest aggregation, generated legal-source data, source generator and environment parsing, secret redaction, classroom documentation, the static HTML-to-app DOM contract, and a dependency-free app boot smoke test.
+
+## Classroom Pilot
+
+The classroom panel combines five curriculum tracks with 30, 50, and 75 minute formats, producing 15 validated scenario packs:
+
+- Jurisdiction and removal.
+- Rule 12 motion practice.
+- Discovery and Rule 56.
+- Joinder and supplemental jurisdiction.
+- Erie and class-actions preview modules.
+
+Each pack defines its own cases, attack cards, motion and discovery cards, budgets, timers, hand sizes, round count, learning objectives, checkpoints, assessment focus, schedule, and recommended replay seed. The source catalog lives in `data/scenario-packs.json`; `npm run scenarios:build` validates it and regenerates `public/scenario-packs.generated.js`.
+
+## Deterministic Sessions and Replay
+
+Deck order comes from a named seed. Starting the same pack with the same seed reproduces the card order. Instructors can:
+
+- Save and load one exact session in browser storage.
+- Export a portable JSON replay containing the seed, exact state, structured docket events, and completed assessments.
+- Import that replay to restore the precise phase, hands, budgets, case state, docket, and assessment.
+
+Replay import validates the schema, known game identifiers, size, and text safety before restoring state. Imported and loaded timers remain paused until the next timed action.
+
+## Instructor Assessment and Playtest Signals
+
+Every completed round records doctrines triggered, wrong motions or discovery tools, dismissed or trial-ready outcome, missing proof items, source hooks, attack results, budget failures, and drawn versus played cards.
+
+The browser then aggregates local-only signals for classroom tuning:
+
+- Average round length.
+- Attack success rate.
+- Plaintiff and defense budget failures.
+- Cases that have never reached trial readiness.
+- Cards drawn but never played.
+
+These statistics remain in the current browser, retain at most 200 completed rounds, and can be cleared from the classroom panel. They are not transmitted or included in source imports.
+
+## Pilot Guides and Printing
+
+- [Instructor guide](public/guides/instructor-guide.html)
+- [Student quickstart](public/guides/student-quickstart.html)
+- [Sample lesson plans](public/guides/lesson-plans.html)
+
+The lesson plans map all 15 scenario packs to suggested class sequences and debrief targets. The app's `Print cards` control prints only the cases and cards in the active pack, together with that pack's title, seed, schedule, and objectives.
 
 ## Legal Source Imports
 
@@ -98,26 +145,32 @@ The professor panel supports:
 - Exam mode, which hides the Rule Judge analysis until revealed.
 - Explanation toggle.
 - Guided tutorial mode.
+- Validated curriculum packs for three class lengths.
+- Custom topic mode for instructor-created combinations.
 
 ## Print Cards
 
-Use `Print cards` in the app. The print view is generated from the same data model used by the game so the physical deck and digital prototype stay aligned.
+Apply a scenario pack, then use `Print cards` in the app. The active pack determines the exact printable case, attack, motion, and discovery subset so the physical deck, lesson plan, and digital session stay aligned.
 
 ## File Structure
 
 - `public/`: static web root served by `npm run serve`.
+- `public/classroom.js`: seeded randomization, snapshot and replay validation, assessment construction, and local playtest aggregation.
 - `public/data.js`: case cards, attack cards, motion/discovery cards, topic modules, sources, tutorial steps.
+- `public/scenario-packs.generated.js`: generated browser-safe scenario packs.
+- `public/guides/`: printable instructor guide, student quickstart, and lesson plans.
 - `public/legal-sources.generated.js`: generated browser-safe source module used by `data.js`.
+- `data/scenario-packs.json`: validated source catalog for the 15 classroom packs.
 - `data/reviewed-game-artifacts.json`: human-reviewed game artifacts promoted from provider candidate lanes.
 - `ops/legal-sources/`: operator-reviewed allowlists and ignored server-side source-ingestion output; not part of the public web root.
 - `public/game-artifacts.generated.js`: generated reviewed gameplay/source artifacts used by `data.js`.
 - `public/rules.js`: rule evaluation and shared helpers.
-- `public/app.js`: UI state, turns, rendering, hands, budget, tutorial, printing.
+- `public/app.js`: UI state, turns, rendering, classroom controls, replay, assessment, balance statistics, tutorial, and printing.
 - `public/rule-tests.js`: reusable test assertions.
-- `scripts/`: legal-source configuration, env loading, private ingestion, and source-manifest generation.
-- `tests/`: Node test runners for doctrine logic and source ingestion.
+- `scripts/`: scenario-pack generation, legal-source configuration, environment loading, private ingestion, and source-manifest generation.
+- `tests/`: Node test runners for doctrine logic, classroom sessions, pilot documents, and source ingestion.
 - `public/styles.css`: game UI and print-card styling.
 
 ## Doctrine Boundary
 
-This is still a learning game, not a legal expert system. It intentionally abstracts doctrine into teachable game states. The source hooks are grounded in core 1L procedure materials, including FRCP 4, 8, 12-15, 18-20, 23, 26/30/34/36/37, 56, and 28 U.S.C. 1331, 1332, 1367, 1391, 1441, and 1446.
+This is a learning game, not a legal expert system or legal advice. It intentionally abstracts doctrine into teachable game states. The source hooks are grounded in core 1L procedure materials, including FRCP 4, 8, 12-15, 18-20, 23, 26/30/34/36/37, 56, and 28 U.S.C. 1331, 1332, 1367, 1391, 1441, and 1446.

@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Civ Pro scales icon">
+  <rect width="64" height="64" rx="12" fill="#315f7b"/>
+  <path d="M32 13v36M18 20h28M22 20l-9 16h18L22 20Zm20 0-9 16h18L42 20ZM24 50h16" fill="none" stroke="#fffefa" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

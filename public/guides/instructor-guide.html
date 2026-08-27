@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Instructor Guide | Civ Pro: Trial Ready</title>
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="guide.css">
+  </head>
+  <body>
+    <main class="guide-shell">
+      <nav class="guide-nav" aria-label="Pilot guides">
+        <a href="../index.html">Game</a>
+        <a href="student-quickstart.html">Student quickstart</a>
+        <a href="lesson-plans.html">Lesson plans</a>
+      </nav>
+
+      <p class="eyeline">Version 0.3 classroom pilot</p>
+      <h1>Instructor Guide</h1>
+      <p class="lede">This guide is for a first classroom pilot, discussion section, office-hour exercise, or formative review. The goal is to make student choices visible and debatable, then use the round evidence to tune the game and the lesson.</p>
+
+      <div class="callout warning">
+        <strong>Doctrine boundary:</strong> Trial Ready is a simplified learning game, not a legal expert system. It emphasizes issue recognition, procedural sequencing, factual application, and record building. Confirm course-specific nuance outside the game, especially in the Erie and class-action preview track.
+      </div>
+
+      <h2>Before class</h2>
+      <ol class="checklist">
+        <li>Open the game in the classroom browser and choose a curriculum track and class length.</li>
+        <li>Keep the recommended replay seed unless you intentionally want a different deal. Record any custom seed in your lesson notes.</li>
+        <li>Select <strong>Apply pack and start</strong>. Confirm that the active pack title, schedule, objectives, budgets, and planned round count appear.</li>
+        <li>Choose whether to use timed play, Study mode, Exam mode, or hidden explanations. For a first pilot, Study mode is safest during the briefing and normal timed mode is useful for the second round.</li>
+        <li>Select <strong>Print cards</strong> if teams will use physical cards. Printing uses only the active pack's case, attack, motion, and discovery subsets and includes the lesson seed and objectives.</li>
+        <li>Print or share the <a href="student-quickstart.html">student quickstart</a>.</li>
+        <li>Divide students into plaintiff and defense teams. Assign one student as docket reader and one as rule explainer if groups are larger than four.</li>
+      </ol>
+
+      <h2>Recommended room setup</h2>
+      <table>
+        <thead>
+          <tr><th>Group size</th><th>Suggested roles</th><th>Display</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2 students</td><td>One plaintiff, one defense</td><td>Shared laptop</td></tr>
+          <tr><td>3 to 4 students</td><td>Plaintiff pair and defense pair</td><td>Shared laptop or projected table</td></tr>
+          <tr><td>5 to 8 students</td><td>Lead advocate, rule explainer, fact checker, and docket reader on each side</td><td>Projected game with one operator</td></tr>
+          <tr><td>Whole class</td><td>Room votes on moves; instructor or student volunteer operates the game</td><td>Projector</td></tr>
+        </tbody>
+      </table>
+
+      <h2>How to facilitate a round</h2>
+      <ol class="steps">
+        <li><strong>Claim and defendant:</strong> Ask the plaintiff to identify the forum, citizenship facts, and why the selected defendant belongs in the case.</li>
+        <li><strong>Threshold window:</strong> Before the defense clicks, require a rule, supporting fact, and predicted procedural effect.</li>
+        <li><strong>Response:</strong> Ask whether the plaintiff's card defeats the attack, cures a defect, or merely redirects the case.</li>
+        <li><strong>Discovery:</strong> Require students to identify the proof item before selecting a tool. When an objection appears, separate compulsion, narrowing, and privilege-log choices.</li>
+        <li><strong>Rule 56:</strong> In at least one pilot round, close discovery before the checklist is complete. This makes the record consequence visible.</li>
+        <li><strong>Assessment:</strong> Stop after the outcome. Read doctrines triggered, wrong motions, missing proof, and source hooks before rotating roles.</li>
+      </ol>
+
+      <h2>Classroom controls</h2>
+      <table class="compact">
+        <thead>
+          <tr><th>Control</th><th>Use</th><th>Important behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Scenario pack</td><td>Constrains cases, cards, budgets, timers, and rounds to a validated lesson.</td><td>Applying a pack starts a fresh session.</td></tr>
+          <tr><td>Replay seed</td><td>Determines deck order.</td><td>The same pack and seed reproduce the same deals and instance sequence.</td></tr>
+          <tr><td>Study mode</td><td>Pauses timers for discussion.</td><td>Does not change doctrine or card outcomes.</td></tr>
+          <tr><td>Exam mode</td><td>Hides analysis until revealed.</td><td>Useful for retrieval practice or cold calls.</td></tr>
+          <tr><td>Save / Load</td><td>Stores one exact session in the current browser.</td><td>Loading pauses any pending timer.</td></tr>
+          <tr><td>Export / Import replay</td><td>Creates or restores a portable JSON replay.</td><td>The file contains the exact state, seed, docket event log, and completed assessments.</td></tr>
+          <tr><td>Print cards</td><td>Prints a physical deck subset.</td><td>The active scenario pack controls every included card.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Assessment evidence</h2>
+      <p>The post-round panel is formative evidence, not a grade by itself. It reports:</p>
+      <ul class="checklist">
+        <li><strong>Doctrines triggered:</strong> Procedural issues actually activated by cards and outcomes.</li>
+        <li><strong>Wrong motions or tools:</strong> Nonresponsive threshold motions and mismatched discovery choices.</li>
+        <li><strong>Outcome:</strong> Dismissed or trial ready, with the controlling reason.</li>
+        <li><strong>Missing proof:</strong> Checklist items absent when the round ended.</li>
+        <li><strong>Source hooks:</strong> Rule or statute references tied to the played sequence.</li>
+        <li><strong>Budget failures:</strong> Attempts that could not proceed because the role lacked game budget.</li>
+      </ul>
+      <p>A useful debrief asks students to correct one wrong move, defend one correct move with a fact, and identify one result that reflects game abstraction rather than full doctrine.</p>
+
+      <h2>Replay a confusing round</h2>
+      <ol class="steps">
+        <li>At the confusing point or immediately after the outcome, select <strong>Export replay</strong>.</li>
+        <li>Keep the JSON file with your pilot notes. The filename identifies the pack, seed, and round.</li>
+        <li>Use <strong>Import replay</strong> to restore the exact phase, hands, budgets, case mutations, docket, and assessment.</li>
+        <li>Read the structured event log in the replay file if you need the order of actions. Re-run the pack with the same seed to repeat the deal from the beginning.</li>
+        <li>If the result remains surprising, record whether the problem is doctrine logic, unclear card language, balance, or facilitation.</li>
+      </ol>
+
+      <h2>Local-only playtest data</h2>
+      <p>Completed-round statistics are stored only in the current browser. They are not submitted to a server, included in source imports, or published with the site. The panel keeps at most 200 rounds and can be cleared at any time.</p>
+      <table class="compact">
+        <thead>
+          <tr><th>Signal</th><th>Definition</th><th>Possible tuning question</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Average round length</td><td>Wall-clock play time from the deal to the recorded outcome, excluding time after a save is loaded.</td><td>Does the pack fit its scheduled play block?</td></tr>
+          <tr><td>Attack success rate</td><td>Meritorious defense attacks that produce a defense-favorable ruling divided by attacks played.</td><td>Are threshold attacks too strong or too weak?</td></tr>
+          <tr><td>Budget failures</td><td>Card attempts blocked by insufficient plaintiff or defense budget.</td><td>Is a role routinely unable to make a pedagogically useful move?</td></tr>
+          <tr><td>Cases never trial ready</td><td>Played cases with no trial-ready outcome in stored rounds.</td><td>Is a case unfair, unclear, or intentionally difficult?</td></tr>
+          <tr><td>Drawn but never played</td><td>Cards drawn at least once but never played across stored rounds.</td><td>Is the card dead weight, too expensive, or poorly signposted?</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Suggested pilot feedback</h2>
+      <p>After class, record these five items alongside any exported replay:</p>
+      <ol class="checklist">
+        <li>Pack, duration, seed, section size, and actual minutes used.</li>
+        <li>One procedural choice students explained well.</li>
+        <li>One card, instruction, or ruling students misunderstood.</li>
+        <li>Whether the post-round assessment matched the discussion you wanted.</li>
+        <li>One concrete change for the next pilot: wording, budget, timer, case, card subset, or facilitation prompt.</li>
+      </ol>
+
+      <h2>Contingencies</h2>
+      <ul class="checklist">
+        <li>If the network is unavailable after the page loads, the game, save/load, stats, and printing continue locally. External source links will not open.</li>
+        <li>If time is short, close discovery early and use Rule 56 as the final decision point.</li>
+        <li>If students are stuck, enable explanations or Study mode rather than supplying the correct card immediately.</li>
+        <li>If a timer expires during discussion, load the saved state or import a replay and continue with timers paused.</li>
+        <li>If a replay import is rejected, confirm it is an unmodified Version 0.3 replay under 2 MB.</li>
+      </ul>
+
+      <p class="print-note">Use your browser's Print command for a paper or PDF copy.</p>
+    </main>
+  </body>
+</html>
