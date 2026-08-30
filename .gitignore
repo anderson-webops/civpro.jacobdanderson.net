@@ -123,6 +123,28 @@ Temporary Items
 .env
 .env.*
 !.env.example
+.envrc
+.direnv/
+
+# Local authentication and signing material.
+.secrets
+.secrets/
+credentials.local
+credentials.local/
+credentials.local.*
+.npmrc
+.netrc
+.pypirc
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+id_rsa
+id_ed25519
 
 # Optional live fetch cache produced by legal-source imports.
 data/legal-sources/cache/
