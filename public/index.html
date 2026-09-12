@@ -68,7 +68,7 @@
           <div id="tutorial-panel" class="tutorial-panel"></div>
           <div class="classroom-card">
             <div class="panel-heading">
-              <span class="section-label">Version 0.4 learning release</span>
+              <span class="section-label">Version 0.4.1 pilot preparation</span>
               <h2>Classroom session</h2>
             </div>
             <label class="field-label" for="scenario-track">Curriculum track</label>
@@ -88,6 +88,8 @@
               <label class="button secondary file-button" for="import-replay-input">Import replay</label>
               <input id="import-replay-input" class="visually-hidden" type="file" accept="application/json,.json">
             </div>
+            <p class="session-status">Save and replay include written answers. Keep downloads private. On a shared computer, clear this game's local data when finished.</p>
+            <button id="clear-game-data-button" class="button secondary full-width">Clear local game data</button>
             <p id="session-status" class="session-status" aria-live="polite">Local save and replay controls are ready.</p>
             <nav class="guide-links" aria-label="Classroom pilot guides">
               <a href="guides/index.html" target="_blank">Searchable guide library</a>
@@ -137,6 +139,12 @@
                 <button id="draw-attack-button" class="button secondary">Draw attack</button>
               </div>
               <div id="attack-hand" class="card-grid"></div>
+              <div class="exchange-controls">
+                <label for="exchange-attack-card">Attack card to exchange</label>
+                <select id="exchange-attack-card" class="field-control"></select>
+                <button id="exchange-attack-button" class="button secondary">Exchange attack</button>
+                <p>Trade one card for the next draw during the defense turn. No budget cost.</p>
+              </div>
             </div>
 
             <div class="zone plaintiff-zone">
@@ -148,6 +156,12 @@
                 <button id="draw-motion-button" class="button secondary">Draw motion</button>
               </div>
               <div id="motion-hand" class="card-grid"></div>
+              <div class="exchange-controls">
+                <label for="exchange-motion-card">Motion or discovery card to exchange</label>
+                <select id="exchange-motion-card" class="field-control"></select>
+                <button id="exchange-motion-button" class="button secondary">Exchange motion or tool</button>
+                <p>Full hand or missing a tool? Trade one card for the next draw during a response or discovery. No budget cost.</p>
+              </div>
             </div>
           </section>
 

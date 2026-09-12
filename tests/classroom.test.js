@@ -2,6 +2,7 @@ import { ATTACK_CARDS, CASES, MOTION_CARDS } from "../public/data.js";
 import { SCENARIO_PACKS } from "../public/scenario-packs.generated.js";
 import {
   addUniqueMetric,
+  APP_VERSION,
   aggregatePlaytestStats,
   appendRoundStats,
   buildRoundAssessment,
@@ -12,6 +13,7 @@ import {
   incrementMetric,
   parseReplayEnvelope,
   restoreSessionState,
+  sanitizePlaytestStats,
   seededShuffle,
   seedToState,
   validateSessionSnapshot
@@ -133,7 +135,8 @@ const restored = restoreSessionState(snapshot, known);
 expect(restored.settings.activeTopics instanceof Set, "Restored active topics should be a Set.");
 expect(restored.selectedDefendant?.id === selectedDefendant.id, "Restored defendant should be re-linked to the active case.");
 expect(restored.rngState === sampleState.rngState, "Restored state should preserve deterministic RNG position.");
-expect(snapshot.appVersion === "0.4.0" && snapshot.contentVersion === "2026-08-27.1", "Snapshot should identify the app and content versions.");
+expect(snapshot.appVersion === APP_VERSION && snapshot.contentVersion === "2026-08-27.1", "Snapshot should identify the app and content versions.");
+expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.0" }, known), "The patch release should retain 0.4.0 replay compatibility.");
 
 const replay = createReplayEnvelope(sampleState, SCENARIO_PACKS[0], 200_000);
 const parsedReplay = parseReplayEnvelope(JSON.stringify(replay), known);
@@ -156,6 +159,10 @@ const secondAssessment = {
 };
 stats = appendRoundStats(stats, secondAssessment, 201_000);
 const summary = aggregatePlaytestStats(stats, { pj: "Rule 12(b)(2)", venue: "Rule 12(b)(3)" });
+expect(!JSON.stringify(stats).includes("selected defendant must be analyzed"), "Balance history must omit learner writing.");
+const legacy = sanitizePlaytestStats({ schemaVersion: 1, rounds: [{ ...assessment, seed: "PRIVATE_TEST_SEED", caseTitle: "PRIVATE_TEST_LABEL", personalNote: "PRIVATE_TEST_NOTE" }] });
+expect(!JSON.stringify(legacy).includes("PRIVATE_TEST"), "Legacy balance history must drop seeds, custom labels, and unapproved fields.");
+expect(!("learningCycles" in legacy.rounds[0]) && !("startedAt" in legacy.rounds[0]), "Balance history must exclude reflections and timestamps.");
 expect(summary.roundCount === 2, "Stats should count stored rounds.");
 expect(summary.averageRoundMinutes === 3, "Stats should calculate average round length.");
 expect(summary.attacksPlayed === 3 && summary.attacksSucceeded === 2, "Stats should aggregate attack outcomes.");

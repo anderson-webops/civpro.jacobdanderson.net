@@ -48,7 +48,7 @@ for (const phrase of [
   "Doctrines triggered",
   "Wrong motions or tools",
   "Missing proof",
-  "Source hooks",
+  "Governing sources",
   "Average round length",
   "Attack success rate",
   "Budget failures",

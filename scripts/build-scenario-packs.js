@@ -30,7 +30,7 @@ export function validateScenarioCatalog(catalog) {
   const knownMotions = new Map(MOTION_CARDS.map((item) => [item.id, item]));
 
   if (catalog.schemaVersion !== 1) failures.push("schemaVersion must be 1.");
-  if (catalog.version !== "0.4.0") failures.push("version must be 0.4.0.");
+  if (catalog.version !== "0.4.1") failures.push("version must be 0.4.1.");
   if (!Array.isArray(catalog.durations)) failures.push("durations must be an array.");
   if (!Array.isArray(catalog.tracks)) failures.push("tracks must be an array.");
 

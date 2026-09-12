@@ -17,7 +17,7 @@
         <a href="lesson-plans.html">Lesson plans</a>
       </nav>
 
-      <p class="eyeline">Version 0.4 learning release</p>
+      <p class="eyeline">Version 0.4.1 pilot preparation</p>
       <h1>Instructor Guide</h1>
       <p class="lede">This guide is for a first classroom pilot, discussion section, office-hour exercise, or formative review. The goal is to make student choices visible and debatable, then use the round evidence to tune the game and the lesson.</p>
 
@@ -26,6 +26,7 @@
       </div>
 
       <h2>Before class</h2>
+      <p>Begin with the 30-minute Jurisdiction and Removal pack in Study mode. Its one round uses 5 minutes for briefing, 18 for play, and 7 for debrief. These are planning targets; record actual time. Repeat the pack to exchange roles. Longer packs rotate roles across their planned rounds.</p>
       <ol class="checklist">
         <li>Open the game in the classroom browser and choose a curriculum track and class length.</li>
         <li>Keep the recommended replay seed unless you intentionally want a different deal. Record any custom seed in your lesson notes.</li>
@@ -67,7 +68,8 @@
         <tbody>
           <tr><td>Scenario pack</td><td>Constrains cases, cards, budgets, timers, and rounds to a validated lesson.</td><td>Applying a pack starts a fresh session.</td></tr>
           <tr><td>Replay seed</td><td>Determines deck order.</td><td>The same pack and seed reproduce the same deals and instance sequence.</td></tr>
-          <tr><td>Study mode</td><td>Pauses timers for discussion.</td><td>Does not change doctrine or card outcomes.</td></tr>
+          <tr><td>Study mode</td><td>Pauses timers for discussion.</td><td>Turning it off starts a fresh full window for the current timed step unless No timer is enabled. Prediction and revision writing remains untimed.</td></tr>
+          <tr><td>Exchange a card</td><td>Trades one selected card for the next draw without spending budget.</td><td>Available during the role's actionable phase, including a full hand. Require students to explain the missing tool; note excessive exchanges for pilot feedback.</td></tr>
           <tr><td>Exam mode</td><td>Hides analysis until revealed.</td><td>Useful for retrieval practice or cold calls.</td></tr>
           <tr><td>Save / Load</td><td>Stores one exact session in the current browser.</td><td>Loading pauses any pending timer.</td></tr>
           <tr><td>Export / Import replay</td><td>Creates or restores a portable JSON replay.</td><td>The file contains the exact state, seed, docket event log, and completed assessments.</td></tr>
@@ -82,7 +84,7 @@
         <li><strong>Wrong motions or tools:</strong> Nonresponsive threshold motions and mismatched discovery choices.</li>
         <li><strong>Outcome:</strong> Dismissed or trial ready, with the controlling reason.</li>
         <li><strong>Missing proof:</strong> Checklist items absent when the round ended.</li>
-        <li><strong>Source hooks:</strong> Rule or statute references tied to the played sequence.</li>
+        <li><strong>Governing sources:</strong> Rule or statute references tied to the played sequence.</li>
         <li><strong>Budget failures:</strong> Attempts that could not proceed because the role lacked game budget.</li>
       </ul>
       <p>A useful debrief asks students to correct one wrong move, defend one correct move with a fact, and identify one result that reflects game abstraction rather than full doctrine.</p>
@@ -98,21 +100,24 @@
 
       <h2>Local-only playtest data</h2>
       <p>Completed-round statistics are stored only in the current browser. They are not submitted to a server, included in source imports, or published with the site. The panel keeps at most 200 rounds and can be cleared at any time.</p>
+      <p>Balance history contains counts and fixed game labels, not written reflections, custom seeds, or timestamps. Save/autosave and replay still contain written answers. Use a dedicated browser profile, omit personal information, keep exported files private, and use <strong>Clear local game data</strong> at the end of a shared-device session. Delete downloaded replays separately.</p>
+      <p>Clear stats before a comparable run; the panel combines stored rounds. Keep private observation notes on the pack, seed, mode, actual minutes, input method, and anonymous role counts. Publish only reviewed aggregate results and paraphrased issues. Do not commit completed observation sheets or learner replays to the public repository.</p>
       <table class="compact">
         <thead>
           <tr><th>Signal</th><th>Definition</th><th>Possible tuning question</th></tr>
         </thead>
         <tbody>
-          <tr><td>Average round length</td><td>Wall-clock play time from the deal to the recorded outcome, excluding time after a save is loaded.</td><td>Does the pack fit its scheduled play block?</td></tr>
+          <tr><td>Average round length</td><td>Elapsed time from deal through assessment, including discussion and writing. Time between a save and its restoration is excluded.</td><td>Does actual classroom play fit the planned block? Record interruptions separately.</td></tr>
           <tr><td>Attack success rate</td><td>Meritorious defense attacks that produce a defense-favorable ruling divided by attacks played.</td><td>Are threshold attacks too strong or too weak?</td></tr>
-          <tr><td>Budget failures</td><td>Card attempts blocked by insufficient plaintiff or defense budget.</td><td>Is a role routinely unable to make a pedagogically useful move?</td></tr>
+          <tr><td>Budget failures</td><td>Attempts rejected by the engine for insufficient budget. Disabled unaffordable cards do not record an attempt.</td><td>Record unaffordable disabled choices manually; zero misses does not establish adequate budget.</td></tr>
+          <tr><td>Card exchanges</td><td>One-for-one exchanges, counted separately from cards played.</td><td>Did the exchange resolve a missing tool or encourage searching without reasoning?</td></tr>
           <tr><td>Cases never trial ready</td><td>Played cases with no trial-ready outcome in stored rounds.</td><td>Is a case unfair, unclear, or intentionally difficult?</td></tr>
           <tr><td>Drawn but never played</td><td>Cards drawn at least once but never played across stored rounds.</td><td>Is the card dead weight, too expensive, or poorly signposted?</td></tr>
         </tbody>
       </table>
 
       <h2>Suggested pilot feedback</h2>
-      <p>After class, record these five items alongside any exported replay:</p>
+      <p>After class, record these five items privately. Prefer reproducing issues with a synthetic replay instead of sharing learner writing:</p>
       <ol class="checklist">
         <li>Pack, duration, seed, section size, and actual minutes used.</li>
         <li>One procedural choice students explained well.</li>

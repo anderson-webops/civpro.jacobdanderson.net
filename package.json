@@ -1,6 +1,6 @@
 {
   "name": "civpro.jacobdanderson.net",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A source-linked Civil Procedure learning game with reproducible classroom play and staged ruling debriefs.",
   "private": true,
   "repository": {

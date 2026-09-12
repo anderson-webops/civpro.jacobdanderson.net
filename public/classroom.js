@@ -1,9 +1,11 @@
-export const APP_VERSION = "0.4.0";
+import { ATTACK_CARDS, CASES, MOTION_CARDS } from "./data.js";
+
+export const APP_VERSION = "0.4.1";
 export const CONTENT_VERSION = "2026-08-27.1";
 export const SOURCE_REVISION = "2026-08-27";
 export const SESSION_SCHEMA_VERSION = 2;
 export const REPLAY_KIND = "civpro-classroom-replay";
-export const PLAYTEST_STATS_SCHEMA_VERSION = 1;
+export const PLAYTEST_STATS_SCHEMA_VERSION = 2;
 export const MAX_STORED_ROUNDS = 200;
 
 const VALID_PHASES = new Set(["claim", "defendant", "attack", "response", "discovery", "summary", "trial"]);
@@ -112,7 +114,8 @@ export function buildRoundAssessment({ metrics, activeCase, outcome, endedAt = D
     attacksSucceeded: metrics.attacksSucceeded,
     budgetFailures: { ...metrics.budgetFailures },
     cardsDrawn: { ...metrics.cardsDrawn },
-    cardsPlayed: { ...metrics.cardsPlayed }
+    cardsPlayed: { ...metrics.cardsPlayed },
+    cardExchanges: { attacks: metrics.cardExchanges?.attacks || 0, motions: metrics.cardExchanges?.motions || 0 }
   };
 }
 
@@ -167,7 +170,7 @@ export function validateSessionSnapshot(snapshot, known = {}) {
   const failures = [];
   if (!snapshot || typeof snapshot !== "object") failures.push("Snapshot must be an object.");
   if (snapshot?.schemaVersion !== SESSION_SCHEMA_VERSION) failures.push(`Snapshot schemaVersion must be ${SESSION_SCHEMA_VERSION}.`);
-  if (snapshot?.appVersion !== APP_VERSION) failures.push(`Snapshot appVersion must be ${APP_VERSION}.`);
+  if (!["0.4.0", APP_VERSION].includes(snapshot?.appVersion)) failures.push(`Snapshot appVersion must be 0.4.0 or ${APP_VERSION}.`);
   if (snapshot?.contentVersion !== CONTENT_VERSION) failures.push(`Snapshot contentVersion must be ${CONTENT_VERSION}.`);
   if (snapshot?.sourceRevision !== SOURCE_REVISION) failures.push(`Snapshot sourceRevision must be ${SOURCE_REVISION}.`);
   const savedState = snapshot?.state;
@@ -255,13 +258,40 @@ export function createEmptyPlaytestStats() {
 }
 
 export function appendRoundStats(stats, assessment, updatedAt = Date.now()) {
-  const next = stats?.schemaVersion === PLAYTEST_STATS_SCHEMA_VERSION
-    ? plainClone(stats)
-    : createEmptyPlaytestStats();
-  next.rounds.push(plainClone(assessment));
+  const next = sanitizePlaytestStats(stats);
+  next.rounds.push(playtestRound(assessment));
   next.rounds = next.rounds.slice(-MAX_STORED_ROUNDS);
-  next.updatedAt = new Date(updatedAt).toISOString();
+  next.updatedAt = null;
   return next;
+}
+
+// Balance history needs numeric outcomes, not learners' writing, seeds, or timestamps.
+export function sanitizePlaytestStats(stats) {
+  return {
+    schemaVersion: PLAYTEST_STATS_SCHEMA_VERSION,
+    updatedAt: null,
+    rounds: (Array.isArray(stats?.rounds) ? stats.rounds : []).slice(-MAX_STORED_ROUNDS).map(playtestRound)
+  };
+}
+
+function playtestRound(round) {
+  const selectedCase = CASES.find((item) => item.id === round?.caseId);
+  const count = (value) => Number.isFinite(value) && value >= 0 ? value : 0;
+  const cardCounts = (record) => Object.fromEntries([...ATTACK_CARDS, ...MOTION_CARDS]
+    .filter((card) => count(record?.[card.id]) > 0)
+    .map((card) => [card.id, count(record[card.id])]));
+  return {
+    caseId: selectedCase?.id || null,
+    caseTitle: selectedCase?.title || "Unfiled claim",
+    durationMs: count(round?.durationMs),
+    outcome: { type: ["trial-ready", "dismissed"].includes(round?.outcome?.type) ? round.outcome.type : "unknown" },
+    attacksPlayed: count(round?.attacksPlayed),
+    attacksSucceeded: count(round?.attacksSucceeded),
+    budgetFailures: { plaintiff: count(round?.budgetFailures?.plaintiff), defense: count(round?.budgetFailures?.defense) },
+    cardExchanges: { attacks: count(round?.cardExchanges?.attacks), motions: count(round?.cardExchanges?.motions) },
+    cardsDrawn: cardCounts(round?.cardsDrawn),
+    cardsPlayed: cardCounts(round?.cardsPlayed)
+  };
 }
 
 export function aggregatePlaytestStats(stats, cardLabels = {}) {
@@ -270,7 +300,8 @@ export function aggregatePlaytestStats(stats, cardLabels = {}) {
     durationMs: 0,
     attacksPlayed: 0,
     attacksSucceeded: 0,
-    budgetFailures: { plaintiff: 0, defense: 0 }
+    budgetFailures: { plaintiff: 0, defense: 0 },
+    cardExchanges: { attacks: 0, motions: 0 }
   };
   const cases = {};
   const cards = {};
@@ -281,6 +312,8 @@ export function aggregatePlaytestStats(stats, cardLabels = {}) {
     totals.attacksSucceeded += Number(round.attacksSucceeded) || 0;
     totals.budgetFailures.plaintiff += Number(round.budgetFailures?.plaintiff) || 0;
     totals.budgetFailures.defense += Number(round.budgetFailures?.defense) || 0;
+    totals.cardExchanges.attacks += Number(round.cardExchanges?.attacks) || 0;
+    totals.cardExchanges.motions += Number(round.cardExchanges?.motions) || 0;
 
     if (round.caseId) {
       const caseStats = cases[round.caseId] || {
@@ -323,6 +356,7 @@ export function aggregatePlaytestStats(stats, cardLabels = {}) {
     attacksSucceeded: totals.attacksSucceeded,
     attackSuccessRate: totals.attacksPlayed ? totals.attacksSucceeded / totals.attacksPlayed : 0,
     budgetFailures: totals.budgetFailures,
+    cardExchanges: totals.cardExchanges,
     commonBudgetFailure: totals.budgetFailures.plaintiff === totals.budgetFailures.defense
       ? "tie"
       : totals.budgetFailures.plaintiff > totals.budgetFailures.defense ? "plaintiff" : "defense",

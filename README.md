@@ -29,6 +29,10 @@ The complete gate covers doctrine branches, authority IDs, malicious markup esca
 
 ## Classroom Pilot
 
+The [pilot protocol](docs/pilot/PROTOCOL.md), [blank observation sheet](docs/pilot/OBSERVATION-SHEET.md), and [interim evaluation](docs/pilot/EVALUATION.md) prepare instructor/student sessions. Human participants were unavailable on 2026-09-12. Version 0.4.1 fixes issues reproduced in an agent rehearsal; it does not establish human-tested pacing or balance.
+
+The update preserves draft reasoning through setting changes and reloads, focuses the active learning stage, distinguishes deliberate nonresponse from expiry, and allows budget-neutral card exchanges when the required card is not in hand. Exchange balance remains provisional pending participant observations.
+
 The classroom panel combines five curriculum tracks with 30, 50, and 75 minute formats, producing 15 validated scenario packs:
 
 - Jurisdiction and removal.
@@ -48,7 +52,7 @@ Deck order comes from a named seed. Starting the same pack with the same seed re
 - Export a portable JSON replay containing the seed, exact state, structured docket events, and completed assessments.
 - Import that replay to restore the precise phase, hands, budgets, case state, docket, and assessment.
 
-Every snapshot records app version `0.4.0`, content version `2026-08-27.1`, and source revision `2026-08-27`. Replay import validates those versions, the schema, known game identifiers, size, and text safety before restoring state. Imported and loaded timers remain paused until the next timed action.
+Every snapshot records app version `0.4.1`, content version `2026-08-27.1`, and source revision `2026-08-27`. Compatible 0.4.0 snapshots remain accepted. Replay import validates these versions, the schema, known game identifiers, size, and text safety before restoring state. Imported and loaded timers remain paused until the next timed action. Turning Study mode or No timer off starts a fresh window for the current timed step. Draft reasoning is autosaved before commitment and is private session content.
 
 ## Staged Learning Lifecycle
 
@@ -76,6 +80,8 @@ The browser then aggregates local-only signals for classroom tuning:
 
 These statistics remain in the current browser, retain at most 200 completed rounds, and can be cleared from the classroom panel. They are not transmitted or included in source imports.
 
+Balance history stores only numeric outcomes and canonical game labels/identifiers; it drops learner writing, custom seeds, and timestamps, including on migration of legacy stats. Full saves and replay files still contain writing. Use **Clear local game data** to remove the game's saved sessions, drafts, and stats from a shared browser; remove downloaded replays separately. Store actual observation sheets outside this public repository. Clear stats between comparable pilot runs because the panel combines stored rounds.
+
 ## Pilot Guides and Printing
 
 - [Searchable guide library](public/guides/index.html)
@@ -97,7 +103,7 @@ npm run build
 
 `public/_headers` supplies a static-host security policy. `deploy/nginx.conf.example` provides the equivalent direct Nginx contract with private-path gates. These files do not authorize or perform a live deployment.
 
-Release identity is three-part: package/app version `0.4.0`, content version `2026-08-27.1`, and source revision `2026-08-27`. A version tag is created only after `npm run audit` and `npm run check` pass from the locked dependency tree.
+Release identity is three-part: package/app version `0.4.1`, content version `2026-08-27.1`, and source revision `2026-08-27`. A version tag is created only after `npm run audit` and `npm run check` pass from the locked dependency tree.
 
 ## Privacy and Public Boundary
 

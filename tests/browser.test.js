@@ -3,6 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
+import { rehearsePacks } from "./pilot-rehearsal.js";
 
 const root = path.resolve("dist/client");
 const failures = [];
@@ -39,12 +40,24 @@ try {
   expect(await page.locator("#active-case .defendant-options").count() === 1, "A claim card should be playable by keyboard.");
   await page.locator("#active-case .option-button:not([disabled])").first().click();
   await page.locator("#attack-hand .playing-card:not([disabled])").first().click();
+  expect(await page.evaluate(() => document.activeElement?.closest("#learning-cycle-output") !== null), "An attack should move keyboard focus to the prediction panel.");
   expect(await page.locator("[data-learning-form='prediction']").count() === 1, "An attack should open the committed-prediction step.");
   await page.locator("[data-learning-form='prediction'] input[value='attack-succeeds']").check();
+  await page.locator("#initial-reasoning").fill("The forum facts are relevant to this procedural issue.");
+  await page.locator("#study-mode").check();
+  expect(await page.locator("#initial-reasoning").inputValue() === "The forum facts are relevant to this procedural issue.", "Changing Study mode must preserve unfinished reasoning.");
+  await page.reload({ waitUntil: "networkidle" });
+  await page.locator("#resume-autosave-button").click();
+  expect(await page.locator("#initial-reasoning").inputValue() === "The forum facts are relevant to this procedural issue.", "Autosave recovery should preserve the uncommitted draft.");
+  await page.locator("#initial-reasoning").fill("            ");
+  await page.locator("[data-learning-form='prediction'] button[type='submit']").click();
+  expect(await page.locator("#initial-reasoning").inputValue() === "            ", "A validation error should not delete the learner's writing.");
+  expect(await page.locator("[data-learning-form='prediction'] [role='alert']").count() === 1, "Validation feedback should appear beside the writing.");
   await page.locator("#initial-reasoning").fill("The selected facts appear to satisfy the attack's governing standard.");
   await page.locator("[data-learning-form='prediction'] button[type='submit']").click();
   expect(await page.getByText("Prediction locked:", { exact: false }).count() === 1, "The learner's initial answer should lock before the response.");
   await page.getByRole("button", { name: "Use no response" }).click();
+  expect(await page.getByText("Response declined", { exact: true }).count() === 1, "An intentional nonresponse must not be reported as a timeout.");
   expect(await page.locator("[data-learning-form='revision']").count() === 1, "The ruling should require a revision before play continues.");
   await page.locator("#revision-reasoning").fill("The ruling turns on the specific forum, timing, and party facts identified by the source.");
   await page.locator("[data-learning-form='revision'] input[value='attack-fails']").check();
@@ -52,6 +65,11 @@ try {
   await page.locator("[data-learning-form='revision'] button[type='submit']").click();
   expect(await page.getByText("Cycle complete", { exact: true }).count() === 1, "Saving the revision should complete and unblock the learning cycle.");
   await expectAccessible(page, "completed learning cycle");
+
+  await page.locator("#save-session-button").click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator("#clear-game-data-button").click();
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("civpro.v0.4.")).length) === 0, "Shared-computer cleanup must remove saves, drafts, and balance history.");
 
   await page.goto(`${baseUrl}/guides/`, { waitUntil: "networkidle" });
   await expectAccessible(page, "guide library");
@@ -63,6 +81,11 @@ try {
     expect(response.status() === 404, `${sensitivePath} should not exist in the portable artifact.`);
   }
   expect(consoleErrors.length === 0, `Rendered pages should not emit console errors: ${consoleErrors.join(" | ")}`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseUrl}/`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "The game should fit a 390px mobile viewport.");
+  await expectAccessible(page, "mobile game");
+  await rehearsePacks(browser, baseUrl);
 } catch (error) {
   failures.push(error instanceof Error ? error.stack || error.message : String(error));
 } finally {

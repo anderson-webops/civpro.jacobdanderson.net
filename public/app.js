@@ -33,6 +33,7 @@ import {
   normalizeSeed,
   parseReplayEnvelope,
   restoreSessionState,
+  sanitizePlaytestStats,
   seededShuffle,
   seedToState
 } from "./classroom.js";
@@ -194,6 +195,11 @@ function bindElements() {
     "active-case",
     "draw-attack-button",
     "draw-motion-button",
+    "exchange-attack-card",
+    "exchange-attack-button",
+    "exchange-motion-card",
+    "exchange-motion-button",
+    "clear-game-data-button",
     "attack-hand",
     "motion-hand",
     "discovery-list",
@@ -219,11 +225,16 @@ function bindEvents() {
   els["print-button"].addEventListener("click", printCards);
   els["draw-attack-button"].addEventListener("click", () => drawToHand("attacks", 1, HAND_LIMITS.attacks));
   els["draw-motion-button"].addEventListener("click", () => drawToHand("motions", 1, HAND_LIMITS.motions));
+  els["exchange-attack-button"].addEventListener("click", () => exchangeCard("attacks", els["exchange-attack-card"].value));
+  els["exchange-motion-button"].addEventListener("click", () => exchangeCard("motions", els["exchange-motion-card"].value));
+  els["clear-game-data-button"].addEventListener("click", clearLocalGameData);
   els["study-mode"].addEventListener("change", () => {
     state.settings.studyMode = els["study-mode"].checked;
     if (state.settings.studyMode) {
       stopTimer();
       setJudge("neutral", "Study mode enabled", "Timers are paused. Talk through the rule before choosing a card.", "Classroom review mode.");
+    } else {
+      resumePhaseTimer();
     }
     render();
   });
@@ -385,6 +396,42 @@ function drawToHand(type, count, limit, shouldRender = true) {
   if (shouldRender) render();
 }
 
+function exchangeAllowed(type) {
+  if (isLearningActionBlocked()) return false;
+  return type === "attacks"
+    ? ["attack", "summary"].includes(state.phase)
+    : ["response", "discovery"].includes(state.phase);
+}
+
+function exchangeCard(type, instanceId) {
+  if (!exchangeAllowed(type)) return;
+  const index = state.hands[type].findIndex((card) => card.instanceId === instanceId);
+  if (index < 0) return;
+  // Draw before discarding so an exchange cannot immediately return the same card.
+  const replacement = drawCards(type, 1)[0];
+  if (!replacement) {
+    setSessionStatus("No different card is available to exchange yet.");
+    return;
+  }
+  const [discarded] = state.hands[type].splice(index, 1, replacement);
+  state.discards[type].push(discarded);
+  state.currentRoundMetrics.cardExchanges ||= { attacks: 0, motions: 0 };
+  state.currentRoundMetrics.cardExchanges[type] += 1;
+  if (state.learningCycle.current?.stage === "response") {
+    state.learningCycle.current.mechanicalCheck.responsiveCardIds = state.hands.motions
+      .filter((card) => card.kind === "motion" && card.answers.includes(state.pendingAttack.attack.id))
+      .map((card) => card.id);
+    state.learningCycle.current.mechanicalCheck.message = state.learningCycle.current.mechanicalCheck.responsiveCardIds.length
+      ? "Choose a responsive motion, or stand on the prediction without responding."
+      : "No responsive motion is currently in hand. Exchange a card or stand on the prediction without responding.";
+  }
+  recordDocket("Card exchanged", `${discarded.title} exchanged for ${replacement.title}; no budget spent.`, {
+    type: "card-exchanged", cardId: discarded.id, replacementId: replacement.id
+  });
+  setSessionStatus("Card exchanged. The hand size and litigation budget are unchanged.");
+  render();
+}
+
 function fileClaim(instanceId) {
   if (state.phase !== "claim") return;
   const selected = state.hands.claims.find((item) => item.instanceId === normalizeInstanceId(instanceId));
@@ -493,7 +540,7 @@ function respondWithMotion(instanceId) {
   resolveAttack(motion);
 }
 
-function resolveAttack(motion) {
+function resolveAttack(motion, responseReason = "timeout") {
   if (!state.pendingAttack) return;
   stopTimer();
   const { attack, evaluation } = state.pendingAttack;
@@ -526,8 +573,9 @@ function resolveAttack(motion) {
       correct: motionIsResponsive
     });
   } else {
-    recordDocket("No timely response", "The attack stands because the motion window expired.", {
-      type: "response-missed",
+    recordDocket(responseReason === "declined" ? "Response declined" : "Response time expired",
+      responseReason === "declined" ? "The plaintiff chose no response; the attack is evaluated on its merits." : "The motion window expired; the attack is evaluated on its merits.", {
+      type: responseReason === "declined" ? "response-declined" : "response-missed",
       attackId: attack.id,
       correct: false
     });
@@ -1066,13 +1114,13 @@ function submitInitialPrediction(form) {
     render();
   } catch (error) {
     setSessionStatus(error.message, true);
-    renderLearningCycle();
+    showLearningError(error.message);
   }
 }
 
 function standOnPrediction() {
   if (state.phase !== "response" || state.learningCycle.current?.stage !== "response") return;
-  resolveAttack(null);
+  resolveAttack(null, "declined");
 }
 
 function submitLearningRevision(form) {
@@ -1105,13 +1153,15 @@ function submitLearningRevision(form) {
     render();
   } catch (error) {
     setSessionStatus(error.message, true);
-    renderLearningCycle();
+    showLearningError(error.message);
   }
 }
 
 function resumePhaseTimer() {
   if (state.phase === "attack") {
     startTimer("Defense attack window", activeScenarioPack()?.timers.attackSeconds || 18, () => passAttacks());
+  } else if (state.phase === "response" && state.learningCycle.current?.stage === "response") {
+    startTimer("Motion response due", activeScenarioPack()?.timers.responseSeconds || 20, () => resolveAttack(null));
   }
 }
 
@@ -1266,9 +1316,8 @@ function loadPlaytestStats() {
   if (!storage) return;
   try {
     const saved = JSON.parse(storage.getItem(PLAYTEST_STORAGE_KEY) || "null");
-    state.playtestStats = saved?.schemaVersion === 1 && Array.isArray(saved.rounds)
-      ? saved
-      : createEmptyPlaytestStats();
+    state.playtestStats = sanitizePlaytestStats(saved);
+    if (saved) persistPlaytestStats();
   } catch {
     state.playtestStats = createEmptyPlaytestStats();
   }
@@ -1371,6 +1420,23 @@ function clearPlaytestStats() {
   renderPlaytestStats();
 }
 
+function clearLocalGameData() {
+  if (!window.confirm("Clear this game's saved sessions, written reflections, and balance history from this browser? Downloaded replay files must be removed separately.")) return;
+  const storage = getLocalStorage();
+  try {
+    for (const key of [SESSION_STORAGE_KEY, AUTOSAVE_STORAGE_KEY, PLAYTEST_STORAGE_KEY]) storage?.removeItem(key);
+  } catch {
+    setSessionStatus("Browser storage could not be cleared. Use this browser's site-data controls.", true);
+    return;
+  }
+  state.autosaveAvailable = null;
+  state.autosaveReady = false;
+  state.playtestStats = createEmptyPlaytestStats();
+  newGame();
+  state.autosaveReady = true;
+  setSessionStatus("Saved sessions, writing, and balance history cleared here. Remove any downloaded replays separately.");
+}
+
 function setSessionStatus(message, isError = false) {
   state.sessionStatus = message;
   state.sessionStatusError = isError;
@@ -1471,7 +1537,10 @@ function renderSettings() {
   els["mode-toggles"].querySelectorAll("[data-mode]").forEach((input) => {
     input.addEventListener("change", () => {
       state.settings[input.dataset.mode] = input.checked;
-      if (input.dataset.mode === "noTimer" && input.checked) stopTimer();
+      if (input.dataset.mode === "noTimer") {
+        if (input.checked) stopTimer();
+        else resumePhaseTimer();
+      }
       render();
     });
   });
@@ -1512,6 +1581,10 @@ function renderSources() {
 
 function renderLearningCycle() {
   const cycle = state.learningCycle.current;
+  const previousKey = els["learning-cycle-output"].dataset.cycleKey;
+  const cycleKey = cycle ? `${cycle.id}:${cycle.stage}` : "empty";
+  const focusWasInside = els["learning-cycle-output"].contains?.(document.activeElement);
+  els["learning-cycle-output"].dataset.cycleKey = cycleKey;
   if (!cycle) {
     els["learning-cycle-output"].innerHTML = `
       <span class="section-label">Learning cycle</span>
@@ -1534,7 +1607,8 @@ function renderLearningCycle() {
           <label><input type="radio" name="prediction" value="attack-fails" required> Attack fails</label>
         </fieldset>
         <label for="initial-reasoning">Why? Identify the controlling fact and rule.</label>
-        <textarea id="initial-reasoning" name="reasoning" rows="3" maxlength="1200" required></textarea>
+        <textarea id="initial-reasoning" name="reasoning" rows="3" minlength="10" maxlength="1200" required></textarea>
+        <p>Use at least 10 characters. Use only the fictional case facts; do not enter personal information.</p>
         <button class="button blue" type="submit">Commit prediction</button>
       </form>
     `;
@@ -1557,14 +1631,15 @@ function renderLearningCycle() {
       <p><strong>Comparison:</strong> ${cycle.predictionCorrect ? "Your prediction matched the ruling." : "Your prediction did not match the ruling."}</p>
       <form data-learning-form="revision" class="reflection-form">
         <label for="revision-reasoning">Revise your analysis after seeing the ruling.</label>
-        <textarea id="revision-reasoning" name="revision" rows="3" maxlength="1200" required></textarea>
+        <textarea id="revision-reasoning" name="revision" rows="3" minlength="10" maxlength="1200" required></textarea>
         <fieldset>
           <legend>${escapeHtml(cycle.alteredFactPrompt)}</legend>
           <label><input type="radio" name="alteredPrediction" value="attack-succeeds" required> Attack succeeds</label>
           <label><input type="radio" name="alteredPrediction" value="attack-fails" required> Attack fails</label>
         </fieldset>
         <label for="altered-reasoning">Explain which changed fact controls.</label>
-        <textarea id="altered-reasoning" name="alteredReasoning" rows="3" maxlength="1200" required></textarea>
+        <textarea id="altered-reasoning" name="alteredReasoning" rows="3" minlength="10" maxlength="1200" required></textarea>
+        <p>Use at least 10 characters in each explanation. Use only fictional case facts.</p>
         <button class="button green" type="submit">Save revision and continue</button>
       </form>
     `;
@@ -1579,6 +1654,23 @@ function renderLearningCycle() {
     `;
   }
 
+  const form = els["learning-cycle-output"].querySelector("form");
+  if (form) {
+    for (const input of form.querySelectorAll("textarea, input")) {
+      const saved = cycle.draft?.[cycle.stage]?.[input.name];
+      if (input.type === "radio") input.checked = input.value === saved;
+      else input.value = saved || "";
+    }
+    form.addEventListener("input", () => {
+      cycle.draft ||= {};
+      cycle.draft[cycle.stage] = Object.fromEntries(new FormData(form));
+      persistAutosave();
+    });
+  }
+  if (previousKey !== cycleKey || focusWasInside) {
+    const target = els["learning-cycle-output"].querySelector("h2");
+    if (target) { target.tabIndex = -1; target.focus(); }
+  }
   els["learning-cycle-output"].querySelector("[data-learning-form='prediction']")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitInitialPrediction(event.currentTarget);
@@ -1588,6 +1680,18 @@ function renderLearningCycle() {
     submitLearningRevision(event.currentTarget);
   });
   els["learning-cycle-output"].querySelector("[data-action='stand-on-prediction']")?.addEventListener("click", standOnPrediction);
+}
+
+function showLearningError(message) {
+  const form = els["learning-cycle-output"].querySelector("form");
+  if (!form) return;
+  let error = form.querySelector("[role='alert']");
+  if (!error) {
+    error = document.createElement("p");
+    error.setAttribute("role", "alert");
+    form.prepend(error);
+  }
+  error.textContent = message;
 }
 
 function authorityTypeLabel(type) {
@@ -1682,6 +1786,7 @@ function renderActiveCase() {
 }
 
 function renderAttackHand() {
+  renderExchangeControls("attacks", "attack");
   els["draw-attack-button"].disabled = state.hands.attacks.length >= HAND_LIMITS.attacks || isLearningActionBlocked();
   els["attack-hand"].innerHTML = state.hands.attacks.map((card) => {
     const disabled = !canPlayAttack(card) || !canAfford("defense", card.cost);
@@ -1698,6 +1803,7 @@ function renderAttackHand() {
 }
 
 function renderMotionHand() {
+  renderExchangeControls("motions", "motion");
   els["draw-motion-button"].disabled = state.hands.motions.length >= HAND_LIMITS.motions;
   els["motion-hand"].innerHTML = state.hands.motions.map((card) => {
     const isMotion = card.kind === "motion";
@@ -1718,6 +1824,16 @@ function renderMotionHand() {
   }).join("");
   els["motion-hand"].querySelectorAll("[data-action='motion']").forEach((button) => button.addEventListener("click", () => respondWithMotion(button.dataset.id)));
   els["motion-hand"].querySelectorAll("[data-action='discovery-response']").forEach((button) => button.addEventListener("click", () => answerDiscoveryResistance(button.dataset.id)));
+}
+
+function renderExchangeControls(type, label) {
+  const select = els[`exchange-${label}-card`];
+  const selected = select.value;
+  select.innerHTML = state.hands[type].map((card) => `<option value="${escapeHtml(card.instanceId)}">${escapeHtml(CARD_LABELS[card.id])}</option>`).join("");
+  if (state.hands[type].some((card) => card.instanceId === selected)) select.value = selected;
+  const disabled = !exchangeAllowed(type) || !state.hands[type].length || (!state.decks[type].length && !state.discards[type].length);
+  select.disabled = disabled;
+  els[`exchange-${label}-button`].disabled = disabled;
 }
 
 function renderDiscovery() {
@@ -1840,7 +1956,9 @@ function renderPlaytestStats() {
       <div><dt>Avg. length</dt><dd>${summary.averageRoundMinutes.toFixed(1)} min</dd></div>
       <div><dt>Attack success</dt><dd>${Math.round(summary.attackSuccessRate * 100)}%</dd></div>
       <div><dt>Budget misses</dt><dd>P ${summary.budgetFailures.plaintiff} / D ${summary.budgetFailures.defense}</dd></div>
+      <div><dt>Card exchanges</dt><dd>D ${summary.cardExchanges.attacks} / P ${summary.cardExchanges.motions}</dd></div>
     </dl>
+    <p>These counts combine stored rounds. Clear stats before a comparable pilot run. A disabled unaffordable card cannot record a budget attempt; note those situations separately.</p>
     <h4>Cases never trial ready</h4>
     ${renderCompactList(neverCases, "Every played case has reached trial at least once.")}
     <h4>Drawn but never played</h4>
