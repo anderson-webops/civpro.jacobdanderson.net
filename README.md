@@ -25,7 +25,7 @@ npm run audit
 npm run check
 ```
 
-The complete gate covers doctrine branches, authority IDs, malicious markup escaping, all 15 scenario packs, deterministic save/replay, staged learning cycles, generated source data, private ingestion boundaries, the guide library, the public artifact allowlist, rendered accessibility, and keyboard play. CI installs the same pinned toolchain and Chromium before running this gate.
+The complete gate covers doctrine branches, authority IDs, malicious markup escaping, all 15 scenario packs, deterministic save/replay, staged learning cycles, generated source data, bounded provider requests, owner-only private outputs, the guide library, the public artifact allowlist, rendered accessibility, and keyboard play. CI installs the same pinned toolchain and Chromium before running this gate.
 
 ## Classroom Pilot
 
@@ -154,6 +154,8 @@ The dry run reads `ops/legal-sources/pacer-import-allowlist.json`, makes no PACE
 - The explicit operator command `npm run pacer:import`.
 
 Production access has an additional guard: set `PACER_DIRECT_ENV=production` and `PACER_DIRECT_ALLOW_PRODUCTION=true`. The default is `PACER_DIRECT_ENV=qa`. Cached PACER artifacts are written only under the ignored `ops/legal-sources/cache/pacer-direct/` directory, include provenance and retrieval timestamps, and redact credential/token/account fields.
+
+All provider and PACER reads reject redirects, enforce finite deadlines, and cap response bytes before parsing. PACER and provider-candidate JSON is written atomically into real, non-symlink directories with mode `0700`; files are forced to mode `0600`. Transport diagnostics retain safe error codes without persisting credential-bearing exception text.
 
 ## Reviewed Game Artifacts
 

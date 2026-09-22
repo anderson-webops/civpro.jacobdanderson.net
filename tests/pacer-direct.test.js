@@ -174,6 +174,8 @@ expect(dryRunText.includes("2026-05-17T12:00:00.000Z"), "PACER dry run should in
 expect(!dryRunText.includes(fakeEnv.PACER_USERNAME), "PACER dry run manifest should not contain the username.");
 expect(!dryRunText.includes(fakeEnv.PACER_PASSWORD), "PACER dry run manifest should not contain the password.");
 expect(!dryRunText.includes(fakeEnv.PACER_CLIENT_CODE), "PACER dry run manifest should not contain the client code.");
+expect((fs.statSync(dryRun.manifestPath).mode & 0o777) === 0o600, "PACER dry run manifest should be owner-readable only.");
+expect((fs.statSync(path.dirname(dryRun.manifestPath)).mode & 0o777) === 0o700, "PACER cache directory should be owner-accessible only.");
 
 const manifest = buildImportManifest({
   mode: "execute",
@@ -249,11 +251,16 @@ const executeResult = await runPacerDirectImport({
 expect(executeResult.mode === "execute", "Mocked PACER execute run should report execute mode.");
 expect(executeResult.networkRequestsMade === 1, "Mocked PACER execute run should count one case-search request.");
 expect(executedFetches.length === 3, "Mocked PACER execute run should authenticate, search once, and logout.");
+expect(executedFetches.every((entry) => entry.options.redirect === "error"), "PACER requests should reject redirects rather than forwarding credentials or tokens.");
 expect(executedFetches[1].url.endsWith("/cases/find?page=0"), "Mocked PACER execute run should call only the case-search endpoint for the allowlist entry.");
 expect(JSON.parse(executedFetches[1].options.body).caseNumberFull === "1:2002bk20340", "Mocked PACER execute run should search only the reviewed case number.");
 expect(executeResult.cachedArtifacts.length === 1, "Mocked PACER execute run should cache one artifact.");
 const artifactPath = path.join(process.cwd(), executeResult.cachedArtifacts[0].artifactPath);
 expect(fs.existsSync(artifactPath), "Mocked PACER execute run should write the cached artifact.");
+expect((fs.statSync(artifactPath).mode & 0o777) === 0o600, "PACER cached artifacts should be owner-readable only.");
+expect((fs.statSync(path.dirname(artifactPath)).mode & 0o777) === 0o700, "PACER entry cache directories should be owner-accessible only.");
+expect((fs.statSync(executeResult.manifestPath).mode & 0o777) === 0o600, "PACER execute manifest should be owner-readable only.");
+expect(!fs.readdirSync(path.dirname(artifactPath)).some((name) => name.includes(".tmp-")), "PACER writes should not leave temporary files after success.");
 const executeText = `${fs.readFileSync(executeResult.manifestPath, "utf8")}\n${fs.readFileSync(artifactPath, "utf8")}`;
 expect(executeText.includes("operator-reviewed direct import"), "Mocked PACER artifact should include provenance.");
 expect(executeText.includes("2026-05-17T13:00:01.000Z"), "Mocked PACER artifact should include retrieval timestamp.");

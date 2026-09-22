@@ -69,6 +69,20 @@ const govinfoRequest = buildRequest(govinfoProbe, fakeEnv);
 expect(govinfoRequest.url.includes("fake-govinfo-key"), "govinfo runtime request should include the supplied key.");
 expect(!redactUrl(govinfoRequest.url).includes("fake-govinfo-key"), "govinfo manifest request URL should redact the supplied key.");
 
+let liveProbeOptions;
+const liveProbe = await buildProbeStatus(govinfoProbe, fakeEnv, true, {
+  fetchImpl: async (_url, options) => {
+    liveProbeOptions = options;
+    return new Response(JSON.stringify({ packages: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  }
+});
+expect(liveProbe.status === "ok", "A bounded successful legal-source probe should remain supported.");
+expect(liveProbeOptions.redirect === "error", "Legal-source probes should reject redirects instead of forwarding provider credentials.");
+expect(liveProbeOptions.signal instanceof AbortSignal, "Legal-source probes should carry a deadline signal.");
+
 expect(inferResultCount({ count: 12 }) === 12, "inferResultCount should read count.");
 expect(inferResultCount({ results: [{}, {}] }) === 2, "inferResultCount should read results array.");
 expect(inferResultCount({ titles: [{}] }) === 1, "inferResultCount should read eCFR titles array.");

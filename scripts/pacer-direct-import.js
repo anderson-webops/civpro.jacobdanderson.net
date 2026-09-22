@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { fetchBoundedResponse } from "./bounded-http.js";
 import { hasValue, mergedEnv } from "./load-env.js";
+import { ensurePrivateDirectory, writePrivateJson } from "./private-json.js";
 import { SECURE_PACER_DIRECT_CONFIG } from "./pacer-direct-config.js";
 
 const SENSITIVE_KEY_PATTERN = /authorization|cookie|password|passcode|otp|token|secret|nextgencso|next-gen-cso|x-next-gen-cso|loginid|clientcode|csoid|firmid/i;
@@ -276,7 +278,7 @@ export function buildPclCaseSearchRequest(entry, token, environment) {
 
 export async function authenticateWithPacer({ env, environment, fetchImpl }) {
   const request = buildAuthRequest(env, environment);
-  const result = await postJson(fetchImpl, request);
+  const result = await postJson(fetchImpl, request, "PACER authentication");
   const token = extractNextGenCso(result.body);
 
   if (!result.ok) {
@@ -298,7 +300,7 @@ export async function authenticateWithPacer({ env, environment, fetchImpl }) {
 
 export async function fetchPclCaseSearch({ entry, token, environment, fetchImpl }) {
   const request = buildPclCaseSearchRequest(entry, token, environment);
-  const result = await postJson(fetchImpl, request);
+  const result = await postJson(fetchImpl, request, `PACER case search ${entry.id}`);
   if (!result.ok) {
     throw new Error(`PACER case search failed for ${entry.id} with HTTP ${result.httpStatus}.`);
   }
@@ -328,7 +330,7 @@ export async function logoutFromPacer({ token, environment, fetchImpl }) {
       },
       body: { nextGenCSO: token }
     };
-    const result = await postJson(fetchImpl, request);
+    const result = await postJson(fetchImpl, request, "PACER logout");
     return {
       httpStatus: result.httpStatus,
       body: sanitizeForCache(result.body)
@@ -417,16 +419,16 @@ export function buildImportManifest({
 
 export function writeCachedPacerArtifact(cacheDir, entryId, artifact, retrievedAt) {
   const entryDir = path.join(cacheDir, safeFileSegment(entryId));
-  fs.mkdirSync(entryDir, { recursive: true });
+  ensurePrivateDirectory(entryDir);
   const filePath = path.join(entryDir, `${safeTimestamp(retrievedAt)}.json`);
-  fs.writeFileSync(filePath, `${JSON.stringify(sanitizeForCache(artifact), null, 2)}\n`);
+  writePrivateJson(filePath, sanitizeForCache(artifact));
   return filePath;
 }
 
 export function writeImportManifest(cacheDir, manifest, generatedAt) {
-  fs.mkdirSync(cacheDir, { recursive: true });
+  ensurePrivateDirectory(cacheDir);
   const filePath = path.join(cacheDir, `pacer-direct-${manifest.mode}-${safeTimestamp(generatedAt)}.local.json`);
-  fs.writeFileSync(filePath, `${JSON.stringify(sanitizeForCache(manifest), null, 2)}\n`);
+  writePrivateJson(filePath, sanitizeForCache(manifest));
   return filePath;
 }
 
@@ -482,13 +484,18 @@ function endpointsFor(environment) {
   return SECURE_PACER_DIRECT_CONFIG.endpoints[normalizeEnvironment(environment)];
 }
 
-async function postJson(fetchImpl, request) {
-  const response = await fetchImpl(request.url, {
+async function postJson(fetchImpl, request, label) {
+  const { response, bodyText } = await fetchBoundedResponse(fetchImpl, request.url, {
     method: request.method,
     headers: request.headers,
-    body: JSON.stringify(request.body)
+    body: JSON.stringify(request.body),
+    redirect: "error"
+  }, {
+    label,
+    timeoutMs: SECURE_PACER_DIRECT_CONFIG.requestTimeoutMs,
+    maxResponseBytes: SECURE_PACER_DIRECT_CONFIG.maxResponseBytes
   });
-  const body = await readResponseBody(response);
+  const body = readResponseBody(response, bodyText);
   return {
     ok: Boolean(response.ok),
     httpStatus: response.status,
@@ -497,16 +504,15 @@ async function postJson(fetchImpl, request) {
   };
 }
 
-async function readResponseBody(response) {
+function readResponseBody(response, bodyText) {
   const contentType = response.headers?.get?.("content-type") || "";
   if (contentType.includes("application/json")) {
-    return response.json();
+    return JSON.parse(bodyText);
   }
-  const text = await response.text();
   try {
-    return JSON.parse(text);
+    return JSON.parse(bodyText);
   } catch {
-    return { text: compactLogText(text, 4000) };
+    return { text: compactLogText(bodyText, 4000) };
   }
 }
 

@@ -9,6 +9,8 @@ export const SECURE_PACER_DIRECT_CONFIG = Object.freeze({
   cacheSubdir: "pacer-direct",
   defaultEnvironment: "qa",
   maxAllowlistEntriesPerRun: 5,
+  requestTimeoutMs: 30_000,
+  maxResponseBytes: 5_242_880,
   allowedEnvironments: Object.freeze(["qa", "production"]),
   allowedKinds: Object.freeze(["pcl-case-search"]),
   requiredCredentialKeys: Object.freeze(["PACER_USERNAME", "PACER_PASSWORD"]),

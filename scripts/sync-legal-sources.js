@@ -8,7 +8,11 @@ import {
   SOURCE_REVIEW,
   SOURCE_PROVIDERS
 } from "./legal-source-config.js";
+import { fetchBoundedResponse } from "./bounded-http.js";
 import { hasValue, mergedEnv } from "./load-env.js";
+
+const PROBE_TIMEOUT_MS = 15_000;
+const PROBE_MAX_RESPONSE_BYTES = 1_048_576;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
@@ -80,7 +84,7 @@ export async function buildManifest({ env, live, includeRestricted = false }) {
 }
 
 export async function buildProbeStatus(probe, env, live, options = {}) {
-  const { includeRestricted = false } = options;
+  const { includeRestricted = false, fetchImpl = globalThis.fetch } = options;
   const missingEnv = probe.envKeys.filter((key) => !hasValue(env, key));
   const request = buildRequest(probe, env);
 
@@ -133,20 +137,23 @@ export async function buildProbeStatus(probe, env, live, options = {}) {
   }
 
   try {
-    const response = await fetch(request.url, {
+    const { response, bodyText } = await fetchBoundedResponse(fetchImpl, request.url, {
       method: probe.method,
-      headers: request.headers
+      headers: request.headers,
+      redirect: "error"
+    }, {
+      label: `${probe.id} legal-source probe`,
+      timeoutMs: PROBE_TIMEOUT_MS,
+      maxResponseBytes: PROBE_MAX_RESPONSE_BYTES
     });
 
     let resultCount = null;
     let sampleKeys = [];
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
-      const json = await response.json();
+      const json = JSON.parse(bodyText);
       resultCount = inferResultCount(json);
       sampleKeys = Object.keys(json).slice(0, 8);
-    } else {
-      await response.arrayBuffer();
     }
 
     return {

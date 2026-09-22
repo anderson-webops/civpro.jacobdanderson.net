@@ -1,10 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { fetchBoundedResponse } from "./bounded-http.js";
 import { hasValue, mergedEnv } from "./load-env.js";
+import { writePrivateJson } from "./private-json.js";
 import { buildRequest, redactHeaders, redactUrl } from "./sync-legal-sources.js";
 
 const outputPath = path.resolve("ops/legal-sources/provider-candidates.local.json");
+const CANDIDATE_TIMEOUT_MS = 15_000;
+const CANDIDATE_MAX_RESPONSE_BYTES = 2_097_152;
 
 const COURTLISTENER_QUERIES = [
   {
@@ -31,19 +35,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   await main();
 }
 
-export async function main(env = mergedEnv()) {
-  const artifact = await buildCandidateArtifact(env);
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
+export async function main(env = mergedEnv(), options = {}) {
+  const artifact = await buildCandidateArtifact(env, options);
+  writePrivateJson(outputPath, artifact);
   printCandidateSummary(artifact);
 }
 
-export async function buildCandidateArtifact(env) {
+export async function buildCandidateArtifact(env, options = {}) {
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
   const providers = [];
-  providers.push(await fetchCourtListenerCandidates(env));
-  providers.push(await fetchGovinfoCandidates(env));
-  providers.push(await fetchCongressCandidates(env));
-  providers.push(await fetchOpenStatesCandidates(env));
+  providers.push(await fetchCourtListenerCandidates(env, fetchImpl));
+  providers.push(await fetchGovinfoCandidates(env, fetchImpl));
+  providers.push(await fetchCongressCandidates(env, fetchImpl));
+  providers.push(await fetchOpenStatesCandidates(env, fetchImpl));
 
   return {
     schemaVersion: 1,
@@ -54,7 +58,7 @@ export async function buildCandidateArtifact(env) {
   };
 }
 
-async function fetchCourtListenerCandidates(env) {
+async function fetchCourtListenerCandidates(env, fetchImpl) {
   if (!hasValue(env, "COURTLISTENER_API_TOKEN")) {
     return skippedProvider("courtlistener", ["COURTLISTENER_API_TOKEN"]);
   }
@@ -67,7 +71,7 @@ async function fetchCourtListenerCandidates(env) {
       query: { q: query.q, type: "o", page_size: "5" },
       headers: { Authorization: "Token ${COURTLISTENER_API_TOKEN}" }
     };
-    const { json, request, status } = await fetchJsonProbe(probe, env);
+    const { json, request, status } = await fetchJsonProbe(probe, env, fetchImpl);
     lanes.push({
       id: query.id,
       label: query.label,
@@ -90,7 +94,7 @@ async function fetchCourtListenerCandidates(env) {
   return { provider: "courtlistener", status: "ok", lanes };
 }
 
-async function fetchGovinfoCandidates(env) {
+async function fetchGovinfoCandidates(env, fetchImpl) {
   if (!hasValue(env, "GOVINFO_API_KEY")) {
     return skippedProvider("govinfo", ["GOVINFO_API_KEY"]);
   }
@@ -101,7 +105,7 @@ async function fetchGovinfoCandidates(env) {
     query: { pageSize: "5", offsetMark: "*", api_key: "${GOVINFO_API_KEY}" },
     headers: {}
   };
-  const { json, request, status } = await fetchJsonProbe(probe, env);
+  const { json, request, status } = await fetchJsonProbe(probe, env, fetchImpl);
   return {
     provider: "govinfo",
     status,
@@ -117,7 +121,7 @@ async function fetchGovinfoCandidates(env) {
   };
 }
 
-async function fetchCongressCandidates(env) {
+async function fetchCongressCandidates(env, fetchImpl) {
   if (!hasValue(env, "CONGRESS_API_KEY")) {
     return skippedProvider("congress", ["CONGRESS_API_KEY"]);
   }
@@ -128,7 +132,7 @@ async function fetchCongressCandidates(env) {
     query: { limit: "5", api_key: "${CONGRESS_API_KEY}" },
     headers: {}
   };
-  const { json, request, status } = await fetchJsonProbe(probe, env);
+  const { json, request, status } = await fetchJsonProbe(probe, env, fetchImpl);
   return {
     provider: "congress",
     status,
@@ -146,7 +150,7 @@ async function fetchCongressCandidates(env) {
   };
 }
 
-async function fetchOpenStatesCandidates(env) {
+async function fetchOpenStatesCandidates(env, fetchImpl) {
   if (!hasValue(env, "OPENSTATES_API_KEY")) {
     return skippedProvider("openstates", ["OPENSTATES_API_KEY"]);
   }
@@ -157,7 +161,7 @@ async function fetchOpenStatesCandidates(env) {
     query: {},
     headers: { "X-API-KEY": "${OPENSTATES_API_KEY}" }
   };
-  const { json, request, status } = await fetchJsonProbe(probe, env);
+  const { json, request, status } = await fetchJsonProbe(probe, env, fetchImpl);
   return {
     provider: "openstates",
     status,
@@ -173,7 +177,7 @@ async function fetchOpenStatesCandidates(env) {
   };
 }
 
-async function fetchJsonProbe(probe, env) {
+export async function fetchJsonProbe(probe, env, fetchImpl = globalThis.fetch) {
   const runtimeRequest = buildRequest(probe, env);
   const publicRequest = {
     method: probe.method,
@@ -181,12 +185,17 @@ async function fetchJsonProbe(probe, env) {
     headers: redactHeaders(runtimeRequest.headers)
   };
   try {
-    const response = await fetch(runtimeRequest.url, {
+    const { response, bodyText } = await fetchBoundedResponse(fetchImpl, runtimeRequest.url, {
       method: probe.method,
-      headers: runtimeRequest.headers
+      headers: runtimeRequest.headers,
+      redirect: "error"
+    }, {
+      label: `${probe.url} provider-candidate request`,
+      timeoutMs: CANDIDATE_TIMEOUT_MS,
+      maxResponseBytes: CANDIDATE_MAX_RESPONSE_BYTES
     });
     const contentType = response.headers.get("content-type") || "";
-    const json = contentType.includes("application/json") ? await response.json() : null;
+    const json = contentType.includes("application/json") ? JSON.parse(bodyText) : null;
     return { json, request: publicRequest, status: response.ok ? "ok" : `http-${response.status}` };
   } catch (error) {
     return {
