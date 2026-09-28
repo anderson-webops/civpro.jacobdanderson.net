@@ -1,14 +1,16 @@
 import { ATTACK_CARDS, CASES, MOTION_CARDS } from "./data.js";
 
-export const APP_VERSION = "0.4.1";
+export const APP_VERSION = "0.4.2";
 export const CONTENT_VERSION = "2026-08-27.1";
 export const SOURCE_REVISION = "2026-08-27";
 export const SESSION_SCHEMA_VERSION = 2;
 export const REPLAY_KIND = "civpro-classroom-replay";
 export const PLAYTEST_STATS_SCHEMA_VERSION = 2;
 export const MAX_STORED_ROUNDS = 200;
+export const VALID_JUDGE_TONES = Object.freeze(["neutral", "good", "bad"]);
 
 const VALID_PHASES = new Set(["claim", "defendant", "attack", "response", "discovery", "summary", "trial"]);
+const COMPATIBLE_APP_VERSIONS = new Set(["0.4.0", "0.4.1", APP_VERSION]);
 
 export function normalizeSeed(value, fallback = "civpro-classroom") {
   const normalized = String(value ?? "").trim().slice(0, 80);
@@ -170,7 +172,9 @@ export function validateSessionSnapshot(snapshot, known = {}) {
   const failures = [];
   if (!snapshot || typeof snapshot !== "object") failures.push("Snapshot must be an object.");
   if (snapshot?.schemaVersion !== SESSION_SCHEMA_VERSION) failures.push(`Snapshot schemaVersion must be ${SESSION_SCHEMA_VERSION}.`);
-  if (!["0.4.0", APP_VERSION].includes(snapshot?.appVersion)) failures.push(`Snapshot appVersion must be 0.4.0 or ${APP_VERSION}.`);
+  if (!COMPATIBLE_APP_VERSIONS.has(snapshot?.appVersion)) {
+    failures.push(`Snapshot appVersion must be ${[...COMPATIBLE_APP_VERSIONS].join(", ")}.`);
+  }
   if (snapshot?.contentVersion !== CONTENT_VERSION) failures.push(`Snapshot contentVersion must be ${CONTENT_VERSION}.`);
   if (snapshot?.sourceRevision !== SOURCE_REVISION) failures.push(`Snapshot sourceRevision must be ${SOURCE_REVISION}.`);
   const savedState = snapshot?.state;
@@ -190,6 +194,9 @@ export function validateSessionSnapshot(snapshot, known = {}) {
     }
     if (!Array.isArray(savedState.learningCycle?.history) || savedState.learningCycle.history.length > 1000) {
       failures.push("Learning-cycle history is missing or too large.");
+    }
+    if (!VALID_JUDGE_TONES.includes(savedState.judge?.tone)) {
+      failures.push(`Judge tone must be one of ${VALID_JUDGE_TONES.join(", ")}.`);
     }
     validateKnownId(savedState.scenarioPackId, known.scenarioPackIds, "scenario pack", failures, true);
     validateKnownId(savedState.activeCase?.id, known.caseIds, "active case", failures, true);

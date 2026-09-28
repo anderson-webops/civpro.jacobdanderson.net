@@ -16,6 +16,7 @@ import {
   sanitizePlaytestStats,
   seededShuffle,
   seedToState,
+  VALID_JUDGE_TONES,
   validateSessionSnapshot
 } from "../public/classroom.js";
 
@@ -137,6 +138,29 @@ expect(restored.selectedDefendant?.id === selectedDefendant.id, "Restored defend
 expect(restored.rngState === sampleState.rngState, "Restored state should preserve deterministic RNG position.");
 expect(snapshot.appVersion === APP_VERSION && snapshot.contentVersion === "2026-08-27.1", "Snapshot should identify the app and content versions.");
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.0" }, known), "The patch release should retain 0.4.0 replay compatibility.");
+expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.1" }, known), "The patch release should retain 0.4.1 replay compatibility.");
+
+for (const tone of VALID_JUDGE_TONES) {
+  const validTone = clone(snapshot);
+  validTone.state.judge.tone = tone;
+  expect(validateSessionSnapshot(validTone, known), `Snapshot validation should accept the ${tone} judge tone.`);
+}
+
+for (const unsafeTone of [
+  `neutral" onmouseover="localStorage.setItem('civpro-xss-proof','triggered')`,
+  "neutral bad",
+  1,
+  null
+]) {
+  const tamperedTone = clone(snapshot);
+  tamperedTone.state.judge.tone = unsafeTone;
+  try {
+    validateSessionSnapshot(tamperedTone, known);
+    failures.push(`Snapshot validation should reject unsafe judge tone ${String(unsafeTone)}.`);
+  } catch (error) {
+    expect(error.message.includes("Judge tone"), "Judge-tone rejection should explain the validation failure.");
+  }
+}
 
 const replay = createReplayEnvelope(sampleState, SCENARIO_PACKS[0], 200_000);
 const parsedReplay = parseReplayEnvelope(JSON.stringify(replay), known);

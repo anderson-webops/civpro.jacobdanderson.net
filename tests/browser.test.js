@@ -67,6 +67,17 @@ try {
   await expectAccessible(page, "completed learning cycle");
 
   await page.locator("#save-session-button").click();
+  await page.evaluate(() => {
+    const key = "civpro.v0.4.saved-session";
+    const snapshot = JSON.parse(localStorage.getItem(key));
+    snapshot.state.judge.tone = `neutral" onmouseover="localStorage.setItem('civpro-xss-proof','triggered')`;
+    localStorage.setItem(key, JSON.stringify(snapshot));
+  });
+  await page.locator("#load-session-button").click();
+  expect(await page.locator("#session-status").textContent().then((value) => value.includes("could not be loaded")), "Unsafe saved judge tones should be rejected before rendering.");
+  expect(await page.locator("#judge-output [onmouseover]").count() === 0, "Rejected replay state must not create event-handler attributes.");
+  await page.locator("#judge-output .ruling").hover();
+  expect(await page.evaluate(() => localStorage.getItem("civpro-xss-proof")) === null, "Rejected replay state must not execute in the headerless browser test server.");
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator("#clear-game-data-button").click();
   expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("civpro.v0.4.")).length) === 0, "Shared-computer cleanup must remove saves, drafts, and balance history.");

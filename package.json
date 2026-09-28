@@ -1,6 +1,6 @@
 {
   "name": "civpro.jacobdanderson.net",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A source-linked Civil Procedure learning game with reproducible classroom play and staged ruling debriefs.",
   "private": true,
   "repository": {
@@ -31,7 +31,7 @@
     "test:artifact": "node tests/client-artifact.test.js",
     "test:browser": "node tests/browser.test.js",
     "audit": "npm audit --audit-level=low && npm audit --omit=dev --audit-level=low && npm audit signatures",
-    "syntax": "node --check public/app.js && node --check public/data.js && node --check public/classroom.js && node --check public/learning-cycle.js && node --check public/safe-html.js && node --check public/guides/catalog.js && node --check public/guides/library.js && node --check public/scenario-packs.generated.js && node --check public/legal-sources.generated.js && node --check public/game-artifacts.generated.js && node --check public/rules.js && node --check public/rule-tests.js && node --check scripts/bounded-http.js && node --check scripts/private-json.js && node --check scripts/load-env.js && node --check scripts/legal-source-config.js && node --check scripts/sync-legal-sources.js && node --check scripts/ingest-game-artifacts.js && node --check scripts/build-reviewed-artifacts.js && node --check scripts/build-scenario-packs.js && node --check scripts/pacer-direct-config.js && node --check scripts/pacer-direct-import.js && node --check scripts/public-artifact-contract.js && node --check scripts/build-static.js && node --check scripts/verify-client-artifact.js",
+    "syntax": "node --check public/app.js && node --check public/data.js && node --check public/classroom.js && node --check public/learning-cycle.js && node --check public/safe-html.js && node --check public/guides/catalog.js && node --check public/guides/library.js && node --check public/scenario-packs.generated.js && node --check public/legal-sources.generated.js && node --check public/game-artifacts.generated.js && node --check public/rules.js && node --check public/rule-tests.js && node --check scripts/approved-public-source.js && node --check scripts/bounded-http.js && node --check scripts/private-json.js && node --check scripts/load-env.js && node --check scripts/legal-source-config.js && node --check scripts/sync-legal-sources.js && node --check scripts/ingest-game-artifacts.js && node --check scripts/build-reviewed-artifacts.js && node --check scripts/build-scenario-packs.js && node --check scripts/pacer-direct-config.js && node --check scripts/pacer-direct-import.js && node --check scripts/public-artifact-contract.js && node --check scripts/build-static.js && node --check scripts/verify-client-artifact.js",
     "check": "npm run syntax && npm test && npm run build && npm run test:artifact && npm run test:browser"
   },
   "devDependencies": {

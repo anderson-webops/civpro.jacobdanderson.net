@@ -29,7 +29,7 @@ The complete gate covers doctrine branches, authority IDs, malicious markup esca
 
 ## Classroom Pilot
 
-The [pilot protocol](docs/pilot/PROTOCOL.md), [blank observation sheet](docs/pilot/OBSERVATION-SHEET.md), and [interim evaluation](docs/pilot/EVALUATION.md) prepare instructor/student sessions. Human participants were unavailable on 2026-09-12. Version 0.4.1 fixes issues reproduced in an agent rehearsal; it does not establish human-tested pacing or balance.
+The [pilot protocol](docs/pilot/PROTOCOL.md), [blank observation sheet](docs/pilot/OBSERVATION-SHEET.md), and [interim evaluation](docs/pilot/EVALUATION.md) prepare instructor/student sessions. Human participants were unavailable on 2026-09-12. Version 0.4.1 fixed issues reproduced in an agent rehearsal; Version 0.4.2 hardens replay import and the public-artifact boundary. Neither release establishes human-tested pacing or balance.
 
 The update preserves draft reasoning through setting changes and reloads, focuses the active learning stage, distinguishes deliberate nonresponse from expiry, and allows budget-neutral card exchanges when the required card is not in hand. Exchange balance remains provisional pending participant observations.
 
@@ -52,7 +52,7 @@ Deck order comes from a named seed. Starting the same pack with the same seed re
 - Export a portable JSON replay containing the seed, exact state, structured docket events, and completed assessments.
 - Import that replay to restore the precise phase, hands, budgets, case state, docket, and assessment.
 
-Every snapshot records app version `0.4.1`, content version `2026-08-27.1`, and source revision `2026-08-27`. Compatible 0.4.0 snapshots remain accepted. Replay import validates these versions, the schema, known game identifiers, size, and text safety before restoring state. Imported and loaded timers remain paused until the next timed action. Turning Study mode or No timer off starts a fresh window for the current timed step. Draft reasoning is autosaved before commitment and is private session content.
+Every new snapshot records app version `0.4.2`, content version `2026-08-27.1`, and source revision `2026-08-27`. Compatible 0.4.0 and 0.4.1 snapshots remain accepted. Replay import validates these versions, the schema, known game identifiers, judge-tone enum, size, and text safety before restoring state. Imported and loaded timers remain paused until the next timed action. Turning Study mode or No timer off starts a fresh window for the current timed step. Draft reasoning is autosaved before commitment and is private session content.
 
 ## Staged Learning Lifecycle
 
@@ -99,11 +99,11 @@ The library covers jurisdiction, pleading, joinder, Erie, discovery, summary jud
 npm run build
 ```
 
-`dist/client` is the only approved deployable artifact. The build copies an explicit 22-file allowlist from `public/`, excludes `public/rule-tests.js`, and then rejects unexpected files, hidden paths, symlinks, private path names, likely secrets, local absolute paths, and unapproved external hosts. Artifact tests confirm that `.env`, `.env.example`, `data/`, `ops/`, `scripts/`, `tests/`, `.git`, and `.github` cannot ship.
+`dist/client` is the only approved deployable artifact. Before changing the output, the build validates every path in the explicit 22-file allowlist as a regular, single-link, non-symlinked file rooted under `public/`. Each file is reopened without following a final symlink, checked against the validated file identity, and copied from that open descriptor. It excludes `public/rule-tests.js`, then rejects unexpected output files, hidden paths, symlinks, private path names, likely secrets, local absolute paths, and unapproved external hosts. Artifact tests confirm that source symlinks, hard links, validation-to-copy swaps, and traversal are rejected and that `.env`, `.env.example`, `data/`, `ops/`, `scripts/`, `tests/`, `.git`, and `.github` cannot ship.
 
 `public/_headers` supplies a static-host security policy. `deploy/nginx.conf.example` provides the equivalent direct Nginx contract with private-path gates. These files do not authorize or perform a live deployment.
 
-Release identity is three-part: package/app version `0.4.1`, content version `2026-08-27.1`, and source revision `2026-08-27`. A version tag is created only after `npm run audit` and `npm run check` pass from the locked dependency tree.
+Release identity is three-part: package/app version `0.4.2`, content version `2026-08-27.1`, and source revision `2026-08-27`. The unchanged scenario catalog remains version `0.4.1`. A version tag is created only after `npm run audit` and `npm run check` pass from the locked dependency tree.
 
 ## Privacy and Public Boundary
 

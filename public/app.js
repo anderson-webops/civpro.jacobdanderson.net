@@ -35,7 +35,8 @@ import {
   restoreSessionState,
   sanitizePlaytestStats,
   seededShuffle,
-  seedToState
+  seedToState,
+  VALID_JUDGE_TONES
 } from "./classroom.js";
 import {
   activeByTopic,
@@ -1072,6 +1073,7 @@ function stopTimer() {
 }
 
 function setJudge(tone, title, body, authorityIds = [], proposition = "") {
+  if (!VALID_JUDGE_TONES.includes(tone)) throw new TypeError(`Unknown judge tone ${tone}.`);
   if (typeof authorityIds === "string") {
     proposition = proposition || authorityIds;
     authorityIds = [];
@@ -1865,7 +1867,7 @@ function renderDiscovery() {
 }
 
 function renderJudge() {
-  const tone = state.judge.tone || "neutral";
+  const tone = VALID_JUDGE_TONES.includes(state.judge.tone) ? state.judge.tone : "neutral";
   const hidden = state.settings.examMode && !state.judge.revealed;
   els["judge-output"].innerHTML = `
     <span class="ruling ${tone}">${tone === "good" ? "Granted" : tone === "bad" ? "Problem" : "Bench note"}</span>
