@@ -25,7 +25,7 @@ function renderGuides() {
   resultCount.textContent = `${matches.length} of ${GUIDES.length} guides shown.`;
   results.innerHTML = matches.length
     ? matches.map(renderGuide).join("")
-    : `<div class="callout"><strong>No matching guide.</strong> Try a broader rule number, doctrine, or category.</div>`;
+    : `<div class="callout"><strong>No matching guide.</strong></div>`;
   openHashGuide();
 }
 
@@ -80,15 +80,12 @@ function openHashGuide() {
 function renderSourcePolicy() {
   const review = LEGAL_SOURCE_MANIFEST.sourceReview;
   document.getElementById("source-review-note").textContent = `Governing source review: ${review.reviewedThrough}. ${review.currentRulesNote}`;
-  const providers = LEGAL_REFERENCE_CARDS.filter((source) => source.authorityType === "provider-metadata");
   const future = LEGAL_REFERENCE_CARDS.filter((source) => source.authorityType === "future-amendment");
   document.getElementById("source-policy-groups").innerHTML = `
-    ${sourcePolicyCard("Primary authority", "Rules, statutes, and cases can support a ruling. Each ruling shows only the authorities active for that result.", LEGAL_SOURCE_CARDS.slice(0, 4))}
+    ${sourcePolicyCard("Primary authority", "Rules, statutes, and cases can support a ruling.", LEGAL_SOURCE_CARDS.slice(0, 4))}
     ${sourcePolicyCard("Secondary explanation", "Readable links aid study but do not replace the official source linked first in each authority record.", [])}
-    ${sourcePolicyCard("Provider and API metadata", "Provider lanes support reviewed content ingestion. They are not displayed as governing authority.", providers)}
-    ${sourcePolicyCard("Future amendments", "Proposals are labeled non-governing and never drive current evaluator logic.", future)}
+    ${sourcePolicyCard("Future amendments", "Proposed amendments are non-governing.", future)}
   `;
-  document.getElementById("library-version").textContent = `Content ${review.contentVersion}; reviewed through ${review.reviewedThrough}.`;
 }
 
 function sourcePolicyCard(title, description, cards) {

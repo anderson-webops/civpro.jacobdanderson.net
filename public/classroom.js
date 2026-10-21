@@ -1,6 +1,6 @@
 import { ATTACK_CARDS, CASES, MOTION_CARDS } from "./data.js";
 
-export const APP_VERSION = "0.4.2";
+export const APP_VERSION = "0.4.4";
 export const CONTENT_VERSION = "2026-08-27.1";
 export const SOURCE_REVISION = "2026-08-27";
 export const SESSION_SCHEMA_VERSION = 2;
@@ -10,7 +10,7 @@ export const MAX_STORED_ROUNDS = 200;
 export const VALID_JUDGE_TONES = Object.freeze(["neutral", "good", "bad"]);
 
 const VALID_PHASES = new Set(["claim", "defendant", "attack", "response", "discovery", "summary", "trial"]);
-const COMPATIBLE_APP_VERSIONS = new Set(["0.4.0", "0.4.1", APP_VERSION]);
+const COMPATIBLE_APP_VERSIONS = new Set(["0.4.0", "0.4.1", "0.4.2", APP_VERSION]);
 
 export function normalizeSeed(value, fallback = "civpro-classroom") {
   const normalized = String(value ?? "").trim().slice(0, 80);

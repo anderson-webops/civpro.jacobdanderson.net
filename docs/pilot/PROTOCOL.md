@@ -1,6 +1,6 @@
 # Instructor and student pilot protocol
 
-Status: prepared on 2026-09-12 and security-hardened on 2026-09-27. Human sessions have not been conducted. Participants are currently unavailable. Start with application 0.4.2 and the existing 0.4.1 scenario packs; source review remains 2026-08-27.
+Status: prepared on 2026-09-12 and security-hardened on 2026-09-27. Human sessions have not been conducted. Participants are currently unavailable. Start with application 0.4.4 and the existing 0.4.1 scenario packs; source review remains 2026-08-27.
 
 ## Purpose and evidence
 

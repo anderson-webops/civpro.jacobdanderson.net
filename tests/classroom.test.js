@@ -139,6 +139,7 @@ expect(restored.rngState === sampleState.rngState, "Restored state should preser
 expect(snapshot.appVersion === APP_VERSION && snapshot.contentVersion === "2026-08-27.1", "Snapshot should identify the app and content versions.");
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.0" }, known), "The patch release should retain 0.4.0 replay compatibility.");
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.1" }, known), "The patch release should retain 0.4.1 replay compatibility.");
+expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.2" }, known), "The patch release should retain 0.4.2 replay compatibility.");
 
 for (const tone of VALID_JUDGE_TONES) {
   const validTone = clone(snapshot);

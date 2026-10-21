@@ -100,10 +100,10 @@ expect(elements.get("claim-hand")?.innerHTML.includes("playing-card"), "Initial 
 expect(elements.get("attack-hand")?.innerHTML.includes("playing-card"), "Initial render should draw attack cards.");
 expect(elements.get("motion-hand")?.innerHTML.includes("playing-card"), "Initial render should draw motion cards.");
 expect(elements.get("source-list")?.innerHTML.includes("No governing authority"), "Initial bench notes should not display unrelated authority cards.");
-expect(elements.get("judge-output")?.innerHTML.includes("Player 1 is plaintiff"), "Initial render should populate the Rule Judge.");
+expect(elements.get("judge-output")?.innerHTML.includes("No ruling yet"), "Initial render should populate the Rule Judge.");
 expect(elements.get("scenario-summary")?.innerHTML.includes("Jurisdiction and Removal"), "Initial render should show the active scenario pack.");
 expect(elements.get("seed-input")?.value === "jurisdiction-removal-50-v1", "Initial render should expose the pack seed.");
-expect(elements.get("assessment-output")?.innerHTML.includes("Complete a round"), "Initial render should explain when assessment appears.");
+expect(elements.get("assessment-output")?.innerHTML.includes("No completed round"), "Initial render should show the empty assessment state.");
 expect(elements.get("stats-output")?.innerHTML.includes("No completed rounds"), "Initial render should explain local-only stats.");
 
 const firstClaimHand = elements.get("claim-hand")?.innerHTML;
@@ -111,7 +111,7 @@ elements.get("new-game-button")?.eventListeners.get("click")?.();
 expect(elements.get("claim-hand")?.innerHTML === firstClaimHand, "Starting again with the same seed should reproduce the claim hand.");
 
 elements.get("save-session-button")?.eventListeners.get("click")?.();
-expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"appVersion":"0.4.2"'), "Save should write a Version 0.4.2 local snapshot.");
+expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"appVersion":"0.4.4"'), "Save should write a Version 0.4.4 local snapshot.");
 expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"contentVersion":"2026-08-27.1"'), "Save should identify the content version.");
 elements.get("seed-input").value = "changed-seed";
 elements.get("new-game-button")?.eventListeners.get("click")?.();

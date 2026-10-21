@@ -28,7 +28,6 @@
     <main id="main-content" class="app-shell" tabindex="-1">
       <header class="topbar">
         <div>
-          <p class="eyeline">1L Civil Procedure Card Game</p>
           <h1>Civ Pro: Trial Ready</h1>
         </div>
         <div class="scoreboard" aria-label="Scoreboard">
@@ -68,7 +67,6 @@
           <div id="tutorial-panel" class="tutorial-panel"></div>
           <div class="classroom-card">
             <div class="panel-heading">
-              <span class="section-label">Version 0.4.2 security hardening</span>
               <h2>Classroom session</h2>
             </div>
             <label class="field-label" for="scenario-track">Curriculum track</label>
@@ -90,9 +88,9 @@
             </div>
             <p class="session-status">Save and replay include written answers. Keep downloads private. On a shared computer, clear this game's local data when finished.</p>
             <button id="clear-game-data-button" class="button secondary full-width">Clear local game data</button>
-            <p id="session-status" class="session-status" aria-live="polite">Local save and replay controls are ready.</p>
-            <nav class="guide-links" aria-label="Classroom pilot guides">
-              <a href="guides/index.html" target="_blank">Searchable guide library</a>
+            <p id="session-status" class="session-status" aria-live="polite"></p>
+            <nav class="guide-links" aria-label="Classroom guides">
+              <a href="guides/index.html" target="_blank">Guide library</a>
               <a href="guides/instructor-guide.html" target="_blank">Instructor guide</a>
               <a href="guides/student-quickstart.html" target="_blank">Student quickstart</a>
               <a href="guides/lesson-plans.html" target="_blank">Lesson plans</a>
@@ -100,7 +98,6 @@
           </div>
           <div class="settings-card">
             <div class="panel-heading">
-              <span class="section-label">Professor mode</span>
               <h2>Study settings</h2>
             </div>
             <div class="preset-row">
@@ -109,7 +106,6 @@
             </div>
             <div id="mode-toggles" class="settings-grid"></div>
             <div class="panel-heading sources-heading">
-              <span class="section-label">Modules</span>
               <h2>Topic deck</h2>
             </div>
             <div id="topic-toggles" class="settings-grid"></div>
@@ -119,7 +115,6 @@
         <section class="table-space">
           <div class="case-strip">
             <div>
-              <span class="section-label">Claim hand</span>
               <h2>Choose a case to file</h2>
             </div>
             <div id="claim-hand" class="card-row"></div>
@@ -133,8 +128,7 @@
             <div class="zone defense-zone">
               <div class="zone-heading">
                 <div>
-                  <span class="section-label">Defense</span>
-                  <h2>Attack hand</h2>
+                  <h2>Defense attacks</h2>
                 </div>
                 <button id="draw-attack-button" class="button secondary">Draw attack</button>
               </div>
@@ -150,8 +144,7 @@
             <div class="zone plaintiff-zone">
               <div class="zone-heading">
                 <div>
-                  <span class="section-label">Plaintiff</span>
-                  <h2>Motion and discovery hand</h2>
+                  <h2>Plaintiff motions and discovery</h2>
                 </div>
                 <button id="draw-motion-button" class="button secondary">Draw motion</button>
               </div>
@@ -160,15 +153,14 @@
                 <label for="exchange-motion-card">Motion or discovery card to exchange</label>
                 <select id="exchange-motion-card" class="field-control"></select>
                 <button id="exchange-motion-button" class="button secondary">Exchange motion or tool</button>
-                <p>Full hand or missing a tool? Trade one card for the next draw during a response or discovery. No budget cost.</p>
+                <p>Trade one card for the next draw during a response or discovery. No budget cost.</p>
               </div>
             </div>
           </section>
 
           <section class="discovery-board">
             <div>
-              <span class="section-label">Discovery checklist</span>
-              <h2>Build the record before summary judgment</h2>
+              <h2>Discovery checklist</h2>
             </div>
             <div id="discovery-list" class="evidence-list"></div>
           </section>
@@ -176,23 +168,19 @@
 
         <aside class="judge-panel" aria-label="Rule Judge">
           <div class="panel-heading">
-            <span class="section-label">Rule Judge</span>
             <h2>Current ruling</h2>
           </div>
           <div id="judge-output" class="judge-output" aria-live="polite" aria-atomic="true"></div>
           <div class="panel-heading sources-heading">
-            <span class="section-label">Instructor assessment</span>
             <h2>Post-round evidence</h2>
           </div>
           <div id="assessment-output" class="assessment-output"></div>
           <div class="panel-heading sources-heading">
-            <span class="section-label">Local-only pilot data</span>
             <h2>Balance signals</h2>
           </div>
           <div id="stats-output" class="stats-output"></div>
           <button id="clear-stats-button" class="button secondary full-width">Clear local stats</button>
           <div class="panel-heading sources-heading">
-            <span class="section-label">Verified hooks</span>
             <h2>Doctrine in play</h2>
           </div>
           <ul id="source-list" class="source-list"></ul>
@@ -203,9 +191,9 @@
 
       <footer class="site-footer">
         <p><strong>Educational simulation:</strong> This site is a simplified 1L study aid, not legal advice or a substitute for the governing text, assigned cases, or course instructions.</p>
-        <p><strong>Sources reviewed through August 27, 2026.</strong> Current evaluator logic uses governing sources only. The August 2026 proposed-amendments package is tracked as non-governing future material.</p>
-        <p><strong>Privacy:</strong> No account, analytics, or server submission endpoint is used. Autosaves, replay data, and playtest signals remain in this browser unless you export a file.</p>
-        <p><a href="guides/index.html#source-policy">Review the guide and source policy</a></p>
+        <p><strong>Sources reviewed through August 27, 2026.</strong> The August 2026 proposed amendments are non-governing.</p>
+        <p><strong>Privacy:</strong> Saved sessions, written answers, and round statistics stay in this browser unless exported.</p>
+        <p><a href="guides/index.html#source-policy">Source policy</a></p>
       </footer>
     </main>
 

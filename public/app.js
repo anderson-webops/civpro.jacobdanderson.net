@@ -1,7 +1,6 @@
 import {
   ATTACK_CARDS,
   CASES,
-  LEGAL_SOURCE_REVIEW,
   MOTION_CARDS,
   PHASES,
   SOURCES,
@@ -19,8 +18,6 @@ import {
   recordLearningRuling
 } from "./learning-cycle.js";
 import {
-  APP_VERSION,
-  CONTENT_VERSION,
   addUniqueMetric,
   aggregatePlaytestStats,
   appendRoundStats,
@@ -114,7 +111,7 @@ const state = {
     history: []
   },
   playtestStats: createEmptyPlaytestStats(),
-  sessionStatus: "Local save and replay controls are ready.",
+  sessionStatus: "",
   sessionStatusError: false,
   autosaveAvailable: null,
   autosaveReady: false,
@@ -131,10 +128,10 @@ const state = {
   },
   judge: {
     tone: "neutral",
-    title: "File a claim to start",
-    body: "Pick one case from the claim hand. Then choose the defendant you want to sue and defend the filing through threshold attacks, discovery, and summary judgment.",
+    title: "No ruling yet",
+    body: "",
     authorityIds: [],
-    proposition: "This prototype abstracts the 1L pretrial sequence into competitive card play.",
+    proposition: "",
     revealed: true
   }
 };
@@ -233,7 +230,7 @@ function bindEvents() {
     state.settings.studyMode = els["study-mode"].checked;
     if (state.settings.studyMode) {
       stopTimer();
-      setJudge("neutral", "Study mode enabled", "Timers are paused. Talk through the rule before choosing a card.", "Classroom review mode.");
+      setJudge("neutral", "Study mode enabled", "Timers paused.");
     } else {
       resumePhaseTimer();
     }
@@ -281,7 +278,7 @@ function newGame() {
   state.discards.attacks = [];
   state.discards.motions = [];
   startRound(true);
-  setSessionStatus(`${pack?.title || "Custom topic deck"} started with seed ${state.seed}.`);
+  setSessionStatus("New game started.");
 }
 
 function startTutorial() {
@@ -298,7 +295,7 @@ function startTutorial() {
   syncScenarioControls();
   renderSettings();
   newGame();
-  setJudge("neutral", "Tutorial started", "Follow the tutorial panel from filing through discovery and trial readiness.", "Tutorial mode uses the same rules with timers paused.");
+  setJudge("neutral", "Tutorial started", "Timers paused.");
   render();
 }
 
@@ -348,9 +345,8 @@ function startRound(initialHand = false) {
   if (state.tutorial.enabled) seedTutorialHands();
   setJudge(
     "neutral",
-    `${state.players[state.plaintiff].name} is plaintiff`,
-    "File one claim. The defense then has a short threshold window to attack jurisdiction, service, venue, pleading, removal, joinder, supplemental jurisdiction, or preview modules.",
-    "The game treats each round as a fresh civil action."
+    "No ruling yet",
+    ""
   );
   render();
 }
@@ -429,7 +425,7 @@ function exchangeCard(type, instanceId) {
   recordDocket("Card exchanged", `${discarded.title} exchanged for ${replacement.title}; no budget spent.`, {
     type: "card-exchanged", cardId: discarded.id, replacementId: replacement.id
   });
-  setSessionStatus("Card exchanged. The hand size and litigation budget are unchanged.");
+  setSessionStatus("Card exchanged.");
   render();
 }
 
@@ -928,8 +924,7 @@ function nextRound() {
     setJudge(
       "good",
       "Classroom session complete",
-      `${roundLimit} planned round${roundLimit === 1 ? "" : "s"} finished. Use the assessment and local balance signals for debrief, then export the replay if the class found a confusing result.`,
-      "Version 0.4 source-linked classroom workflow."
+      `${roundLimit} planned round${roundLimit === 1 ? "" : "s"} finished.`
     );
     setSessionStatus(`Session complete after ${roundLimit} planned round${roundLimit === 1 ? "" : "s"}.`);
     render();
@@ -1239,7 +1234,6 @@ function renderScenarioSummary(pack = activeScenarioPack(), preview = false) {
   if (!pack) {
     els["scenario-summary"].innerHTML = `
       <span class="status-pill">Custom topic deck</span>
-      <p>Manual module choices are active. Select and apply a validated scenario pack for timed lesson structure, a round limit, and pack-specific printing.</p>
     `;
     return;
   }
@@ -1248,7 +1242,6 @@ function renderScenarioSummary(pack = activeScenarioPack(), preview = false) {
     <p><strong>${escapeHtml(pack.shortTitle)}</strong></p>
     <p>${escapeHtml(pack.summary)}</p>
     <p class="schedule-line">${pack.schedule.briefing} min brief / ${pack.schedule.play} min play / ${pack.schedule.debrief} min debrief</p>
-    <p>App ${escapeHtml(APP_VERSION)}; content ${escapeHtml(CONTENT_VERSION)}; sources reviewed through ${escapeHtml(LEGAL_SOURCE_REVIEW.reviewedThrough)}.</p>
     <details>
       <summary>Objectives and checkpoints</summary>
       <ul>${pack.learningObjectives.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
@@ -1533,7 +1526,7 @@ function renderSettings() {
   els["topic-toggles"].innerHTML = TOPIC_MODULES.map((topic) => `
     <label class="toggle small">
       <input type="checkbox" data-topic="${safeId(topic.id)}" ${state.settings.activeTopics.has(topic.id) ? "checked" : ""}>
-      <span>${escapeHtml(topic.label)}${topic.preview ? " (preview)" : ""}</span>
+      <span>${escapeHtml(topic.label)}</span>
     </label>
   `).join("");
   els["mode-toggles"].querySelectorAll("[data-mode]").forEach((input) => {
@@ -1565,7 +1558,7 @@ function renderSources() {
     .map((id) => AUTHORITY_BY_ID.get(id))
     .filter(Boolean);
   if (!activeSources.length) {
-    els["source-list"].innerHTML = "<li>No governing authority is active for this bench note.</li>";
+    els["source-list"].innerHTML = "<li>No governing authority for the current ruling.</li>";
     return;
   }
   els["source-list"].innerHTML = activeSources.map((source) => `
@@ -1588,11 +1581,7 @@ function renderLearningCycle() {
   const focusWasInside = els["learning-cycle-output"].contains?.(document.activeElement);
   els["learning-cycle-output"].dataset.cycleKey = cycleKey;
   if (!cycle) {
-    els["learning-cycle-output"].innerHTML = `
-      <span class="section-label">Learning cycle</span>
-      <h2>Commit before the ruling</h2>
-      <p>When an attack is played, predict the result, choose a procedural response, revise after the ruling, and test one altered fact.</p>
-    `;
+    els["learning-cycle-output"].innerHTML = "";
     return;
   }
 
@@ -1727,7 +1716,7 @@ function renderActiveCase() {
   if (!state.activeCase) {
     els["active-case"].innerHTML = `
       <div class="empty-state">
-        <div><strong>No active claim</strong><p>Pick a case card to begin a round.</p></div>
+        <div><strong>No active claim</strong></div>
       </div>
     `;
     return;
@@ -1840,7 +1829,7 @@ function renderExchangeControls(type, label) {
 
 function renderDiscovery() {
   if (!state.activeCase || !state.selectedDefendant) {
-    els["discovery-list"].innerHTML = `<div class="empty-state"><div><strong>No checklist yet</strong><p>File a claim and choose a defendant first.</p></div></div>`;
+    els["discovery-list"].innerHTML = `<div class="empty-state"><strong>No checklist yet</strong></div>`;
     return;
   }
   const tools = state.hands.motions.filter((card) => card.kind === "discovery-tool");
@@ -1887,7 +1876,7 @@ function renderAssessment() {
   const assessment = state.lastAssessment;
   if (!assessment) {
     els["assessment-output"].innerHTML = `
-      <p>Complete a round to generate doctrines triggered, wrong motions, outcome, missing proof, and governing authority IDs.</p>
+      <p>No completed round.</p>
     `;
     return;
   }
@@ -1946,7 +1935,7 @@ function renderPlaytestStats() {
   const summary = aggregatePlaytestStats(state.playtestStats, CARD_LABELS);
   if (!summary.roundCount) {
     els["stats-output"].innerHTML = `
-      <p>No completed rounds are stored yet. Stats stay in this browser and are not included in the public site or source pipeline.</p>
+      <p>No completed rounds stored.</p>
     `;
     return;
   }
@@ -1960,7 +1949,7 @@ function renderPlaytestStats() {
       <div><dt>Budget misses</dt><dd>P ${summary.budgetFailures.plaintiff} / D ${summary.budgetFailures.defense}</dd></div>
       <div><dt>Card exchanges</dt><dd>D ${summary.cardExchanges.attacks} / P ${summary.cardExchanges.motions}</dd></div>
     </dl>
-    <p>These counts combine stored rounds. Clear stats before a comparable pilot run. A disabled unaffordable card cannot record a budget attempt; note those situations separately.</p>
+    <p>Counts combine stored rounds. Disabled unaffordable cards do not count as budget attempts.</p>
     <h4>Cases never trial ready</h4>
     ${renderCompactList(neverCases, "Every played case has reached trial at least once.")}
     <h4>Drawn but never played</h4>

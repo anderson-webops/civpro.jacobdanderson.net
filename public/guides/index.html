@@ -21,18 +21,15 @@
       </nav>
 
       <header>
-        <p class="eyeline">Civ Pro: Trial Ready</p>
         <h1>Guide Library</h1>
-        <p class="lede">Eight source-linked guides connect the game’s procedural choices to governing rules, cases, course framing, exam strategy, and transfer practice.</p>
         <div class="callout">
           <strong>Educational boundary.</strong> These materials are a simplified study aid, not legal advice. Verify governing text and follow your professor’s framing for graded work.
         </div>
       </header>
 
-      <section class="library-controls" aria-labelledby="find-guides-title">
-        <h2 id="find-guides-title">Find a guide</h2>
-        <label for="guide-search">Search titles, rules, cases, strategies, and hypotheticals</label>
-        <input id="guide-search" type="search" autocomplete="off" placeholder="Try removal, Rule 56, or Erie">
+      <section class="library-controls" aria-label="Guide filters">
+        <label for="guide-search">Search guides</label>
+        <input id="guide-search" type="search" autocomplete="off">
         <label for="guide-category">Category</label>
         <select id="guide-category"></select>
         <p id="guide-result-count" class="result-count" aria-live="polite"></p>
@@ -47,8 +44,7 @@
       </section>
 
       <footer class="library-footer">
-        <p>Privacy: searches, guide choices, game autosaves, and playtest signals remain in this browser. This static site has no account, analytics, or server submission endpoint.</p>
-        <p id="library-version"></p>
+        <p>Privacy: game saves and written answers stay in this browser unless exported.</p>
       </footer>
     </main>
     <script type="module" src="library.js"></script>

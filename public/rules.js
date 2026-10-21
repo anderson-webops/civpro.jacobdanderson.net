@@ -303,7 +303,7 @@ export function evaluateAttack({ attack, activeCase: c, selectedDefendant: d, at
         body: "No rule found.",
         winDetail: "No rule found.",
         authorityIds: [],
-        proposition: "No governing authority is mapped to this prototype action."
+        proposition: "No governing authority is mapped to this action."
       };
   }
 }

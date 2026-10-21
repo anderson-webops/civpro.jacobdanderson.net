@@ -758,6 +758,10 @@ h3 {
   padding: 18px;
 }
 
+.learning-cycle:empty {
+  display: none;
+}
+
 .empty-state {
   display: grid;
   place-items: center;
