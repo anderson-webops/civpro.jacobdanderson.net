@@ -1,5 +1,14 @@
 # Repository Instructions
 
+## Standing Dependency Completion Policy
+
+Read and follow the standing dependency completion policy in `AGENTS.md` in
+this directory. It requires complete dependency remediation, clean locked
+installations, zero-vulnerability full and production audits, applicable checks
+before release, and validated source delivery. Existing maintenance pauses,
+exclusions, approvals and production-access boundaries remain in force.
+Published releases and verified live deployments are separate outcomes.
+
 ## Direct Delivery and Pull Requests
 
 - After a coherent change set passes the repository's required checks, default to committing it and pushing it directly to the repository's default branch. Do not open a pull request unless the user explicitly asks for one, branch protection requires it, or an external-contribution policy makes direct integration inappropriate.
