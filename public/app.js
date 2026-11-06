@@ -26,6 +26,7 @@ import {
   createReplayEnvelope,
   createRoundMetrics,
   createSessionSnapshot,
+  HAND_LIMITS,
   incrementMetric,
   normalizeSeed,
   parseReplayEnvelope,
@@ -71,7 +72,6 @@ const DISCOVERY_AUTHORITY_IDS = {
   admission: ["frcp-36"],
   expert: ["frcp-26"]
 };
-const HAND_LIMITS = { attacks: 6, motions: 8 };
 const state = {
   players: [
     { name: "Player 1", score: 0, dismissed: 0 },
@@ -305,17 +305,49 @@ function buildDecks() {
   state.decks.motions = buildDeck("motions");
 }
 
-function buildDeck(type) {
+function deckDefinitions(type) {
   const pack = activeScenarioPack();
   const definitions = type === "claims" ? CASES : type === "attacks" ? ATTACK_CARDS : MOTION_CARDS;
   const ids = type === "claims" ? pack?.caseIds : type === "attacks" ? pack?.attackCardIds : pack?.motionCardIds;
   const selected = ids
     ? ids.map((id) => definitions.find((item) => item.id === id)).filter(Boolean)
     : activeByTopic(definitions, state.settings.activeTopics);
-  return shuffle(selected.map(clone));
+  return selected;
+}
+
+function buildDeck(type) {
+  return shuffle(deckDefinitions(type).map(clone));
+}
+
+function availableCardCount(type) {
+  if (state.decks[type].length) return state.decks[type].length;
+  if (type === "claims") return deckDefinitions(type).length;
+  const definitions = type === "attacks" ? ATTACK_CARDS : MOTION_CARDS;
+  return state.discards[type].filter((card) => definitions.some((item) => item.id === card.id)).length;
+}
+
+function ensureCardCapacity(count) {
+  if (Number.isSafeInteger(state.sequence) && state.sequence > 0
+    && Number.isSafeInteger(count) && count >= 0 && Number.isSafeInteger(state.sequence + count)) return true;
+  setSessionStatus("Card identifiers exhausted. Start a new game.", true);
+  return false;
+}
+
+function roundCardCount(initialHand = false) {
+  const pack = activeScenarioPack();
+  let count = Math.min(pack?.claimHandSize || 3, availableCardCount("claims"));
+  for (const type of ["attacks", "motions"]) {
+    count += Math.min(initialHand ? HAND_LIMITS[type] : 2,
+      Math.max(0, HAND_LIMITS[type] - state.hands[type].length), availableCardCount(type));
+  }
+  if (state.tutorial.enabled) {
+    count += Object.values(tutorialHandDefinitions()).reduce((total, cards) => total + cards.length, 0);
+  }
+  return count;
 }
 
 function startRound(initialHand = false) {
+  if (!ensureCardCapacity(roundCardCount(initialHand))) return;
   stopTimer();
   const pack = activeScenarioPack();
   state.phase = "claim";
@@ -351,18 +383,30 @@ function startRound(initialHand = false) {
   render();
 }
 
+function tutorialHandDefinitions() {
+  return {
+    claims: [CASES.find((item) => item.id === "tire-failure")],
+    attacks: ATTACK_CARDS.filter((card) => ["pj", "remove", "summary-judgment"].includes(card.id)),
+    motions: MOTION_CARDS.filter((card) =>
+      ["notice-deposition", "request-production", "motion-compel", "expert-disclosure", "remand", "show-record"].includes(card.id))
+  };
+}
+
 function seedTutorialHands() {
-  state.hands.claims = [withInstance(CASES.find((item) => item.id === "tire-failure"), state.sequence++)];
-  state.hands.attacks = ATTACK_CARDS.filter((card) => ["pj", "remove", "summary-judgment"].includes(card.id)).map((card) => withInstance(card, state.sequence++));
-  state.hands.motions = MOTION_CARDS.filter((card) =>
-    ["notice-deposition", "request-production", "motion-compel", "expert-disclosure", "remand", "show-record"].includes(card.id)
-  ).map((card) => withInstance(card, state.sequence++));
+  const definitions = tutorialHandDefinitions();
+  const count = Object.values(definitions).reduce((total, cards) => total + cards.length, 0);
+  if (!ensureCardCapacity(count)) return;
+  for (const [type, cards] of Object.entries(definitions)) {
+    state.hands[type] = cards.map((card) => withInstance(card, state.sequence++));
+  }
 }
 
 function drawCards(type, count) {
+  const planned = Math.min(count, availableCardCount(type));
+  if (!ensureCardCapacity(planned) || !planned) return [];
   if (!state.decks[type].length) replenishDeck(type);
   const cards = [];
-  for (let index = 0; index < count; index += 1) {
+  for (let index = 0; index < planned; index += 1) {
     if (!state.decks[type].length) break;
     const card = withInstance(state.decks[type].shift(), state.sequence++);
     cards.push(card);
@@ -389,7 +433,9 @@ function replenishDeck(type) {
 function drawToHand(type, count, limit, shouldRender = true) {
   if (state.hands[type].length >= limit) return;
   const room = limit - state.hands[type].length;
-  state.hands[type].push(...drawCards(type, Math.min(room, count)));
+  const cards = drawCards(type, Math.min(room, count));
+  if (!cards.length) return;
+  state.hands[type].push(...cards);
   if (shouldRender) render();
 }
 
@@ -404,6 +450,7 @@ function exchangeCard(type, instanceId) {
   if (!exchangeAllowed(type)) return;
   const index = state.hands[type].findIndex((card) => card.instanceId === instanceId);
   if (index < 0) return;
+  if (!ensureCardCapacity(Math.min(1, availableCardCount(type)))) return;
   // Draw before discarding so an exchange cannot immediately return the same card.
   const replacement = drawCards(type, 1)[0];
   if (!replacement) {
@@ -916,9 +963,10 @@ function dismissCase(title, body, authorityIds = [], proposition = "") {
 
 function nextRound() {
   if (isLearningActionBlocked()) return;
+  const roundLimit = activeScenarioPack()?.rounds;
+  if (!(roundLimit && state.round >= roundLimit) && !ensureCardCapacity(roundCardCount())) return;
   stopTimer();
   advanceTutorial("next-round");
-  const roundLimit = activeScenarioPack()?.rounds;
   if (roundLimit && state.round >= roundLimit) {
     state.sessionComplete = true;
     setJudge(
@@ -969,7 +1017,7 @@ function normalizeInstanceId(instanceId) {
 
 function recordDocket(title, detail, metadata = {}) {
   const entry = {
-    id: state.eventSequence++,
+    id: state.eventLog.length + 1,
     round: state.round,
     phase: state.phase,
     type: metadata.type || "docket-note",
@@ -979,6 +1027,7 @@ function recordDocket(title, detail, metadata = {}) {
   };
   state.docket.push(entry);
   state.eventLog.push(clone(entry));
+  state.eventSequence = state.eventLog.length + 1;
   return entry;
 }
 

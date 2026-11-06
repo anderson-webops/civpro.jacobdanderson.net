@@ -6,7 +6,11 @@ This repository is `anderson-webops/civpro.jacobdanderson.net`, with its local c
 
 ## Run
 
-The project pins Node `24.18.1` and npm `12.0.2` in `.node-version`, `.nvmrc`, `package.json`, and CI.
+The project pins Node `26.13.0` and the independently locked npm `12.2.2` build profile in `.node-version`, `.nvmrc`, `package.json`, and CI. Prepare and select the profile before installing or running checks:
+
+```sh
+export PATH="$(node scripts/build-toolchain.mjs --print-bin):$PATH"
+```
 
 Because the app is split into browser modules, run it from the explicit public web root:
 
@@ -52,7 +56,7 @@ Deck order comes from a named seed. Starting the same pack with the same seed re
 - Export a portable JSON replay containing the seed, exact state, structured docket events, and completed assessments.
 - Import that replay to restore the precise phase, hands, budgets, case state, docket, and assessment.
 
-Every new snapshot records app version `0.4.4`, content version `2026-08-27.1`, and source revision `2026-08-27`. Compatible 0.4.0, 0.4.1, and 0.4.2 snapshots remain accepted. Replay import validates these versions, the schema, known game identifiers, judge-tone enum, size, and text safety before restoring state. Imported and loaded timers remain paused until the next timed action. Turning Study mode or No timer off starts a fresh window for the current timed step. Draft reasoning is autosaved before commitment and is private session content.
+Every new snapshot records app version `0.4.5`, content version `2026-08-27.1`, and source revision `2026-08-27`. Compatible 0.4.0 through 0.4.4 snapshots remain accepted. Replay import validates these versions, the schema, known game identifiers, judge-tone enum, size, and text safety before restoring state. Imported and loaded timers remain paused until the next timed action. Turning Study mode or No timer off starts a fresh window for the current timed step. Draft reasoning is autosaved before commitment and is private session content.
 
 ## Staged Learning Lifecycle
 
@@ -103,7 +107,7 @@ npm run build
 
 `public/_headers` supplies a static-host security policy. `deploy/nginx.conf.example` provides the equivalent direct Nginx contract with private-path gates. These files do not authorize or perform a live deployment.
 
-Release identity is three-part: package/app version `0.4.4`, content version `2026-08-27.1`, and source revision `2026-08-27`. The unchanged scenario catalog remains version `0.4.1`. A version tag is created only after `npm run audit` and `npm run check` pass from the locked dependency tree.
+Release identity is three-part: package/app version `0.4.5`, content version `2026-08-27.1`, and source revision `2026-08-27`. The unchanged scenario catalog remains version `0.4.1`. A version tag is created only after `npm run audit` and `npm run check` pass from the locked dependency tree.
 
 ## Privacy and Public Boundary
 

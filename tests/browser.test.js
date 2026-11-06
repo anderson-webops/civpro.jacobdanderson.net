@@ -4,6 +4,8 @@ import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 import { rehearsePacks } from "./pilot-rehearsal.js";
+import { createReplayEnvelope } from "../public/classroom.js";
+import { ATTACK_CARDS } from "../public/data.js";
 
 const root = path.resolve("dist/client");
 const failures = [];
@@ -14,20 +16,24 @@ const baseUrl = `http://127.0.0.1:${port}`;
 
 let browser;
 try {
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true, channel: "chromium" });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
+  page.setDefaultTimeout(15_000);
+  page.setDefaultNavigationTimeout(15_000);
   const consoleErrors = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
+  console.log("Browser phase: landing and accessibility");
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
   await expectAccessible(page, "game landing page");
   expect(await page.locator("#resume-autosave-button").isHidden(), "A fresh session should not offer a nonexistent autosave to resume.");
   expect(await page.locator("#discard-autosave-button").isHidden(), "A fresh session should not offer a nonexistent autosave to discard.");
 
+  console.log("Browser phase: keyboard and learning cycle");
   await page.keyboard.press("Tab");
   const firstFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
   expect(firstFocus === "Skip to game table", "The skip link should be the first keyboard focus target.");
@@ -67,6 +73,7 @@ try {
   await expectAccessible(page, "completed learning cycle");
 
   await page.locator("#save-session-button").click();
+  const savedSnapshot = await page.evaluate(() => JSON.parse(localStorage.getItem("civpro.v0.4.saved-session")));
   await page.evaluate(() => {
     const key = "civpro.v0.4.saved-session";
     const snapshot = JSON.parse(localStorage.getItem(key));
@@ -78,10 +85,114 @@ try {
   expect(await page.locator("#judge-output [onmouseover]").count() === 0, "Rejected replay state must not create event-handler attributes.");
   await page.locator("#judge-output .ruling").hover();
   expect(await page.evaluate(() => localStorage.getItem("civpro-xss-proof")) === null, "Rejected replay state must not execute in the headerless browser test server.");
+
+  console.log("Browser phase: rejected replay imports");
+  const injectedReplay = createReplayEnvelope(savedSnapshot.state);
+  injectedReplay.snapshot.state = {
+    ...injectedReplay.snapshot.state,
+    playtestStats: { rounds: [{ caseId: "__proto__" }] }
+  };
+  const attackCount = await page.locator("#attack-hand .playing-card").count();
+  await page.locator("#import-replay-input").setInputFiles({
+    name: "injected-stats.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(injectedReplay))
+  });
+  await page.waitForFunction(() => document.querySelector("#session-status")?.textContent?.includes("Replay import failed"));
+  expect(await page.evaluate(() => !Object.hasOwn(Object.prototype, "rounds")), "Rejected replay must not alter Object.prototype.");
+  expect(await page.locator("#attack-hand .playing-card").count() === attackCount, "Rejected replay must not redraw the attack hand.");
+
+  const oversizedReplay = structuredClone(injectedReplay);
+  delete oversizedReplay.snapshot.state.playtestStats;
+  oversizedReplay.snapshot.state.hands.attacks = Array.from({ length: 1000 }, (_, index) => ({
+    ...savedSnapshot.state.hands.attacks[0], instanceId: `pj-${index + 100}`
+  }));
+  await page.locator("#import-replay-input").setInputFiles({
+    name: "oversized-hand.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(oversizedReplay))
+  });
+  await page.waitForFunction(() => document.querySelector("#session-status")?.textContent?.includes("attack hand exceeds"));
+  expect(await page.locator("#attack-hand .playing-card").count() === attackCount, "Oversized replay must fail before rendering cards.");
+
+  const inactiveCaseReplay = createReplayEnvelope(savedSnapshot.state);
+  const inactiveClaim = structuredClone(inactiveCaseReplay.snapshot.state.activeCase);
+  inactiveClaim.defendants = Array.from({ length: 1000 }, () => structuredClone(inactiveClaim.defendants[0]));
+  inactiveCaseReplay.snapshot.state.hands.claims = [inactiveClaim];
+  inactiveCaseReplay.snapshot.state.activeCase = null;
+  inactiveCaseReplay.snapshot.state.phase = "claim";
+  const duplicateProofReplay = createReplayEnvelope(savedSnapshot.state);
+  duplicateProofReplay.snapshot.state.activeCase.evidence[1] = structuredClone(duplicateProofReplay.snapshot.state.activeCase.evidence[0]);
+  const staleCounterReplay = createReplayEnvelope(savedSnapshot.state);
+  staleCounterReplay.snapshot.state.sequence = 1;
+  const malformedEventReplay = createReplayEnvelope(savedSnapshot.state);
+  malformedEventReplay.snapshot.state.eventSequence = { valueOf: 0, toString: 0 };
+  for (const [name, replay, message] of [
+    ["inactive-case.json", inactiveCaseReplay, "known case limit"],
+    ["duplicate-proof.json", duplicateProofReplay, "duplicate ids"],
+    ["stale-counter.json", staleCounterReplay, "exceed existing card identifiers"],
+    ["malformed-event-counter.json", malformedEventReplay, "Event sequence"]
+  ]) {
+    await page.locator("#import-replay-input").setInputFiles({
+      name,
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(replay))
+    });
+    await page.waitForFunction((fragment) => document.querySelector("#session-status")?.textContent?.includes(fragment), message);
+    expect(await page.locator("#attack-hand .playing-card").count() === attackCount, `${name} must not change the rendered session.`);
+  }
+
+  console.log("Browser phase: counter exhaustion and atomic recovery");
+  for (const sequence of [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER - 1]) {
+    const replay = createReplayEnvelope(savedSnapshot.state);
+    replay.snapshot.state.sequence = sequence;
+    replay.snapshot.state.hands.attacks = [];
+    replay.snapshot.state.decks.attacks = structuredClone(ATTACK_CARDS.slice(0, 2));
+    await page.locator("#import-replay-input").setInputFiles({
+      name: "bounded-counter.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(replay))
+    });
+    await page.waitForFunction(() => document.querySelector("#session-status")?.textContent?.includes("Replay imported"));
+    await page.locator("#draw-attack-button").click();
+    await page.locator("#draw-attack-button").click();
+    expect((await page.locator("#session-status").textContent()).includes("identifiers exhausted"), "Counter exhaustion should produce an explicit recoverable error.");
+    await page.locator("#save-session-button").click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("civpro.v0.4.saved-session")));
+    const expectedDraws = sequence === Number.MAX_SAFE_INTEGER ? 0 : 1;
+    expect(saved.state.sequence === Number.MAX_SAFE_INTEGER && saved.state.hands.attacks.length === expectedDraws
+      && saved.state.decks.attacks.length === 2 - expectedDraws, "A refused draw must preserve the bounded hand and deck.");
+    await page.locator("#load-session-button").click();
+    expect((await page.locator("#session-status").textContent()).includes("restored"), "Counter-boundary saves must remain reloadable.");
+    if (expectedDraws) {
+      await page.locator("#save-session-button").click();
+      const reloaded = await page.evaluate(() => JSON.parse(localStorage.getItem("civpro.v0.4.saved-session")));
+      await page.locator("#exchange-attack-card").selectOption(saved.state.hands.attacks[0].instanceId);
+      await page.locator("#exchange-attack-button").click();
+      expect((await page.locator("#session-status").textContent()).includes("identifiers exhausted"), "Exhausted exchanges should preserve the explicit limit.");
+      await page.locator("#save-session-button").click();
+      const after = await page.evaluate(() => JSON.parse(localStorage.getItem("civpro.v0.4.saved-session")));
+      expect(JSON.stringify(after.state) === JSON.stringify(reloaded.state), "A refused exchange must preserve complete session state.");
+    }
+  }
+  const exhaustedRound = createReplayEnvelope(savedSnapshot.state);
+  exhaustedRound.snapshot.state.sequence = Number.MAX_SAFE_INTEGER - 2;
+  exhaustedRound.snapshot.state.phase = "trial";
+  await page.locator("#import-replay-input").setInputFiles({
+    name: "exhausted-round.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(exhaustedRound))
+  });
+  await page.waitForFunction(() => document.querySelector("#session-status")?.textContent?.includes("Replay imported"));
+  await page.locator("#save-session-button").click();
+  const beforeRound = await page.evaluate(() => JSON.parse(localStorage.getItem("civpro.v0.4.saved-session")));
+  await page.locator("[data-action='next-round']").click();
+  expect((await page.locator("#session-status").textContent()).includes("identifiers exhausted"), "An exhausted next round must stop before changing game state.");
+  await page.locator("#save-session-button").click();
+  const afterRound = await page.evaluate(() => JSON.parse(localStorage.getItem("civpro.v0.4.saved-session")));
+  expect(JSON.stringify(afterRound.state) === JSON.stringify(beforeRound.state), "A refused round must retain roles, round, cards and metrics.");
+
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator("#clear-game-data-button").click();
   expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("civpro.v0.4.")).length) === 0, "Shared-computer cleanup must remove saves, drafts, and balance history.");
 
+  console.log("Browser phase: guides and private-path boundaries");
   await page.goto(`${baseUrl}/guides/`, { waitUntil: "networkidle" });
   await expectAccessible(page, "guide library");
   await page.locator("#guide-search").fill("removal");
@@ -96,11 +207,14 @@ try {
   await page.goto(`${baseUrl}/`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "The game should fit a 390px mobile viewport.");
   await expectAccessible(page, "mobile game");
+  console.log("Browser phase: synthetic scenario rehearsal");
   await rehearsePacks(browser, baseUrl);
 } catch (error) {
   failures.push(error instanceof Error ? error.stack || error.message : String(error));
 } finally {
+  console.log("Browser phase: cleanup");
   await browser?.close();
+  server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
 }
 
@@ -117,7 +231,18 @@ function expect(condition, message) {
 }
 
 async function expectAccessible(page, label) {
-  const result = await new AxeBuilder({ page }).analyze();
+  let timer;
+  let result;
+  try {
+    result = await Promise.race([
+      new AxeBuilder({ page }).analyze(),
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} accessibility analysis exceeded 60 seconds.`)), 60_000);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
   const severe = result.violations.filter((violation) => ["serious", "critical"].includes(violation.impact));
   if (severe.length) {
     failures.push(`${label} has severe accessibility violations: ${severe.map((item) => `${item.id}: ${item.nodes.map((node) => `${node.target.join(" ")} ${node.failureSummary}`).join(" | ")}`).join(" || ")}`);

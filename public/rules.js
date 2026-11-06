@@ -7,6 +7,7 @@ export function activeByTopic(items, activeTopics) {
 }
 
 export function withInstance(card, sequence) {
+  if (!Number.isSafeInteger(sequence) || sequence < 1) throw new Error("Card sequence must be a positive safe integer.");
   return { ...clone(card), instanceId: `${card.id}-${sequence}` };
 }
 

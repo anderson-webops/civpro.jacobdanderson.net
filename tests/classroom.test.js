@@ -1,5 +1,6 @@
 import { ATTACK_CARDS, CASES, MOTION_CARDS } from "../public/data.js";
 import { SCENARIO_PACKS } from "../public/scenario-packs.generated.js";
+import { withInstance } from "../public/rules.js";
 import {
   addUniqueMetric,
   APP_VERSION,
@@ -10,6 +11,7 @@ import {
   createReplayEnvelope,
   createRoundMetrics,
   createSessionSnapshot,
+  HAND_LIMITS,
   incrementMetric,
   parseReplayEnvelope,
   restoreSessionState,
@@ -28,6 +30,15 @@ function expect(condition, message) {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function expectSnapshotRejected(candidate, messageFragment, label) {
+  try {
+    restoreSessionState(candidate, known);
+    failures.push(`${label} should fail before state restoration.`);
+  } catch (error) {
+    expect(error.message.includes(messageFragment), `${label} should explain its validation failure.`);
+  }
 }
 
 const firstSeed = { rngState: seedToState("section-a") };
@@ -140,6 +151,104 @@ expect(snapshot.appVersion === APP_VERSION && snapshot.contentVersion === "2026-
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.0" }, known), "The patch release should retain 0.4.0 replay compatibility.");
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.1" }, known), "The patch release should retain 0.4.1 replay compatibility.");
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.2" }, known), "The patch release should retain 0.4.2 replay compatibility.");
+expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.3" }, known), "The patch release should retain 0.4.3 draft replay compatibility.");
+expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.4" }, known), "The patch release should retain 0.4.4 replay compatibility.");
+
+const injectedStats = clone(snapshot);
+injectedStats.state.playtestStats = { rounds: [{ caseId: "__proto__" }] };
+expectSnapshotRejected(injectedStats, "unsupported state fields", "Injected playtest statistics");
+const injectedPrototype = clone(snapshot);
+Object.defineProperty(injectedPrototype.state, "__proto__", { value: { rounds: 1 }, enumerable: true });
+expectSnapshotRejected(injectedPrototype, "unsupported state fields", "Injected prototype key");
+
+const oversizedAttacks = clone(snapshot);
+oversizedAttacks.state.hands.attacks = Array.from({ length: HAND_LIMITS.attacks + 1 }, (_, index) => ({
+  ...clone(ATTACK_CARDS[0]), instanceId: `pj-${index + 20}`
+}));
+expectSnapshotRejected(oversizedAttacks, "attack hand exceeds", "Oversized attack hand");
+const oversizedMotionDeck = clone(snapshot);
+oversizedMotionDeck.state.decks.motions = Array.from({ length: MOTION_CARDS.length + 200 * HAND_LIMITS.motions + 1 }, () => clone(MOTION_CARDS[0]));
+expectSnapshotRejected(oversizedMotionDeck, "motion deck exceeds", "Oversized motion deck");
+const longTutorialDiscards = clone(snapshot);
+longTutorialDiscards.state.sequence = 120;
+longTutorialDiscards.state.discards.motions = Array.from({ length: 20 }, (_, index) => ({
+  ...clone(MOTION_CARDS[0]), instanceId: `${MOTION_CARDS[0].id}-${index + 100}`
+}));
+expect(validateSessionSnapshot(longTutorialDiscards, known), "Legitimate multi-round tutorial discards should remain importable.");
+const oversizedEvidence = clone(snapshot);
+oversizedEvidence.state.activeCase.evidence = Array.from({ length: 5000 }, (_, index) => ({
+  id: `proof-${index}`, title: "Synthetic proof", description: "Controlled fixture"
+}));
+expectSnapshotRejected(oversizedEvidence, "active case evidence exceeds", "Oversized evidence list");
+const oversizedDefendants = clone(snapshot);
+oversizedDefendants.state.activeCase.defendants = Array.from({ length: 50 }, (_, index) => ({ id: `party-${index}` }));
+expectSnapshotRejected(oversizedDefendants, "active case defendants exceeds", "Oversized defendant list");
+const maximumHands = clone(snapshot);
+maximumHands.state.sequence = 100;
+maximumHands.state.hands.attacks = ATTACK_CARDS.slice(0, HAND_LIMITS.attacks)
+  .map((card, index) => ({ ...clone(card), instanceId: `${card.id}-${index + 20}` }));
+maximumHands.state.hands.motions = MOTION_CARDS.slice(0, HAND_LIMITS.motions)
+  .map((card, index) => ({ ...clone(card), instanceId: `${card.id}-${index + 40}` }));
+expect(validateSessionSnapshot(maximumHands, known), "Normal hand-size limits should remain importable.");
+const duplicateInstance = clone(snapshot);
+duplicateInstance.state.hands.motions[0].instanceId = duplicateInstance.state.hands.attacks[0].instanceId;
+expectSnapshotRejected(duplicateInstance, "Duplicate card instance id", "Duplicate card instance");
+
+for (const group of ["decks", "hands"]) {
+  for (const field of ["defendants", "evidence"]) {
+    const candidate = clone(snapshot);
+    const claim = clone(CASES.find((item) => item[field].length > 1));
+    claim.instanceId = `${claim.id}-20`;
+    candidate.state.sequence = 21;
+    candidate.state.activeCase = null;
+    candidate.state.phase = "claim";
+    candidate.state[group].claims = [claim];
+    claim[field] = Array.from({ length: 1000 }, () => clone(claim[field][0]));
+    expectSnapshotRejected(candidate, "known case limit", `${group} claim oversized ${field}`);
+  }
+}
+for (const placement of ["activeCase", "decks", "hands"]) {
+  for (const field of ["defendants", "evidence"]) {
+    const candidate = clone(snapshot);
+    const claim = clone(CASES.find((item) => item[field].length > 1));
+    claim[field][1] = clone(claim[field][0]);
+    if (placement === "activeCase") candidate.state.activeCase = claim;
+    else candidate.state[placement].claims = [claim];
+    expectSnapshotRejected(candidate, "duplicate ids", `${placement} duplicate ${field}`);
+    claim[field][1].id = "unknown-case-item";
+    expectSnapshotRejected(candidate, "unknown id", `${placement} unknown ${field}`);
+  }
+}
+const staleSequence = clone(snapshot);
+staleSequence.state.sequence = 1;
+expectSnapshotRejected(staleSequence, "exceed existing card identifiers", "Counter below existing card identifiers");
+const unsafeSequence = clone(snapshot);
+unsafeSequence.state.sequence = Number.MAX_SAFE_INTEGER + 1;
+expectSnapshotRejected(unsafeSequence, "safe integer", "Unsafe card counter");
+for (const eventSequence of [{ valueOf: 0, toString: 0 }, 0, 1.5, Number.MAX_SAFE_INTEGER]) {
+  const candidate = clone(snapshot);
+  candidate.state.eventSequence = eventSequence;
+  expectSnapshotRejected(candidate, "Event sequence", "Invalid event counter");
+}
+const numberedEvents = clone(snapshot);
+numberedEvents.state.eventLog = [{ id: 1, title: "Controlled event" }];
+numberedEvents.state.eventSequence = 2;
+expect(validateSessionSnapshot(numberedEvents, known), "Sequential event history should remain importable.");
+const duplicateEvents = clone(numberedEvents);
+duplicateEvents.state.eventLog.push(clone(duplicateEvents.state.eventLog[0]));
+duplicateEvents.state.eventSequence = 3;
+expectSnapshotRejected(duplicateEvents, "Event log ids", "Repeated event identifier");
+const missingInstance = clone(snapshot);
+delete missingInstance.state.hands.attacks[0].instanceId;
+expectSnapshotRejected(missingInstance, "instance id is missing", "Missing card instance");
+try {
+  withInstance(ATTACK_CARDS[0], Number.MAX_SAFE_INTEGER + 1);
+  failures.push("Unsafe draw counters should fail before generating ambiguous card identifiers.");
+} catch (error) {
+  expect(error.message.includes("safe integer"), "Draw-counter exhaustion should explain its failure.");
+}
+expect(withInstance(ATTACK_CARDS[0], Number.MAX_SAFE_INTEGER).instanceId.endsWith(String(Number.MAX_SAFE_INTEGER)),
+  "The final safe draw counter should remain uniquely representable.");
 
 for (const tone of VALID_JUDGE_TONES) {
   const validTone = clone(snapshot);
@@ -167,6 +276,12 @@ const replay = createReplayEnvelope(sampleState, SCENARIO_PACKS[0], 200_000);
 const parsedReplay = parseReplayEnvelope(JSON.stringify(replay), known);
 expect(parsedReplay.reproducibility.seed === "section-a", "Replay should preserve the original seed.");
 expect(parsedReplay.snapshot.state.phase === "attack", "Replay should preserve the exact phase.");
+try {
+  parseReplayEnvelope(JSON.stringify({ ...replay, snapshot: injectedStats }), known);
+  failures.push("Replay parsing should reject injected statistics before import.");
+} catch (error) {
+  expect(error.message.includes("unsupported state fields"), "Replay rejection should identify unsupported state fields.");
+}
 
 let stats = createEmptyPlaytestStats();
 stats = appendRoundStats(stats, assessment, 200_000);
@@ -193,6 +308,15 @@ expect(summary.averageRoundMinutes === 3, "Stats should calculate average round 
 expect(summary.attacksPlayed === 3 && summary.attacksSucceeded === 2, "Stats should aggregate attack outcomes.");
 expect(summary.neverTrialReady.some((item) => item.id === "tire-failure"), "Stats should identify cases that never reach trial.");
 expect(summary.deadCards.some((item) => item.id === "venue" && item.drawn === 3), "Stats should identify drawn but unplayed cards.");
+const hostileSummary = aggregatePlaytestStats({ rounds: [{
+  caseId: "__proto__", outcome: { type: "trial-ready" },
+  cardsDrawn: JSON.parse('{"__proto__":1,"constructor":1}')
+}] });
+expect(!Object.hasOwn(Object.prototype, "rounds") && !Object.hasOwn(Object.prototype, "trialReady"),
+  "Untrusted case keys must not change Object.prototype.");
+expect(hostileSummary.casePerformance[0]?.id === "__proto__" && hostileSummary.casePerformance[0]?.rounds === 1,
+  "Statistics should safely count a prototype-shaped case key.");
+expect(hostileSummary.deadCards.length === 2, "Prototype-shaped card keys should not break aggregation.");
 
 const tampered = clone(snapshot);
 tampered.state.judge.body = "<img src=x>";

@@ -133,6 +133,7 @@ credentials.local
 credentials.local/
 credentials.local.*
 .npmrc
+!/build-toolchain/.npmrc
 .netrc
 .pypirc
 *.pem

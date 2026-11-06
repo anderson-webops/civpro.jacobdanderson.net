@@ -1,3 +1,5 @@
+import { ATTACK_CARDS, CASES } from "../public/data.js";
+
 const elements = new Map();
 const failures = [];
 
@@ -49,7 +51,12 @@ class StubElement {
     return [];
   }
 
-  querySelector() {
+  querySelector(selector) {
+    if (selector === "[data-action='next-round']" && this.innerHTML.includes('data-action="next-round"')) {
+      const key = `${this.id} ${selector}`;
+      if (!elements.has(key)) elements.set(key, new StubElement(key));
+      return elements.get(key);
+    }
     return null;
   }
 }
@@ -111,13 +118,79 @@ elements.get("new-game-button")?.eventListeners.get("click")?.();
 expect(elements.get("claim-hand")?.innerHTML === firstClaimHand, "Starting again with the same seed should reproduce the claim hand.");
 
 elements.get("save-session-button")?.eventListeners.get("click")?.();
-expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"appVersion":"0.4.4"'), "Save should write a Version 0.4.4 local snapshot.");
+expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"appVersion":"0.4.5"'), "Save should write a Version 0.4.5 local snapshot.");
 expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"contentVersion":"2026-08-27.1"'), "Save should identify the content version.");
 elements.get("seed-input").value = "changed-seed";
 elements.get("new-game-button")?.eventListeners.get("click")?.();
 elements.get("load-session-button")?.eventListeners.get("click")?.();
 expect(elements.get("seed-input")?.value === "jurisdiction-removal-50-v1", "Load should restore the saved replay seed.");
 expect(elements.get("session-status")?.textContent.includes("restored"), "Load should report restored session status.");
+
+function currentSnapshot() {
+  elements.get("save-session-button").eventListeners.get("click")();
+  return JSON.parse(window.localStorage.getItem("civpro.v0.4.saved-session"));
+}
+
+function loadSnapshot(value) {
+  window.localStorage.setItem("civpro.v0.4.saved-session", JSON.stringify(value));
+  elements.get("load-session-button").eventListeners.get("click")();
+  expect(elements.get("session-status").textContent.includes("restored"), "A bounded high-counter snapshot should remain reloadable.");
+}
+
+const counterBaseline = currentSnapshot();
+const malformedEventCounter = structuredClone(counterBaseline);
+malformedEventCounter.state.eventSequence = { valueOf: 0, toString: 0 };
+window.localStorage.setItem("civpro.v0.4.saved-session", JSON.stringify(malformedEventCounter));
+elements.get("load-session-button").eventListeners.get("click")();
+expect(elements.get("session-status").textContent.includes("could not be loaded"), "Malformed event counters must be rejected before restoring state.");
+expect(JSON.stringify(currentSnapshot().state) === JSON.stringify(counterBaseline.state), "A rejected event counter must preserve the current game.");
+for (const sequence of [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER - 1]) {
+  const candidate = structuredClone(counterBaseline);
+  candidate.state.sequence = sequence;
+  candidate.state.hands.attacks = [];
+  candidate.state.decks.attacks = structuredClone(ATTACK_CARDS.slice(0, 2));
+  candidate.state.phase = "attack";
+  candidate.state.activeCase = structuredClone(CASES[0]);
+  candidate.state.selectedDefendantId = CASES[0].defendants[0].id;
+  loadSnapshot(candidate);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      elements.get("draw-attack-button").eventListeners.get("click")();
+    } catch (error) {
+      failures.push(`Counter exhaustion must not throw or lose deck cards: ${error.message}`);
+    }
+  }
+  expect(elements.get("session-status").textContent.includes("identifiers exhausted"), "An exhausted draw must report the recoverable limit.");
+  const saved = currentSnapshot();
+  const draws = sequence === Number.MAX_SAFE_INTEGER ? 0 : 1;
+  expect(saved.state.sequence === Number.MAX_SAFE_INTEGER, "Draws must retain a safe next counter.");
+  expect(saved.state.hands.attacks.length === draws && saved.state.decks.attacks.length === 2 - draws,
+    "A refused draw must preserve the deck and hand atomically.");
+  loadSnapshot(saved);
+  if (draws) {
+    const reloaded = currentSnapshot();
+    elements.get("exchange-attack-card").value = saved.state.hands.attacks[0].instanceId;
+    try {
+      elements.get("exchange-attack-button").eventListeners.get("click")();
+    } catch (error) {
+      failures.push(`Exhausted exchange must not throw: ${error.message}`);
+    }
+    expect(JSON.stringify(currentSnapshot().state) === JSON.stringify(reloaded.state), "A refused exchange must preserve the complete saved state.");
+  }
+}
+const exhaustedRound = structuredClone(counterBaseline);
+exhaustedRound.state.sequence = Number.MAX_SAFE_INTEGER - 2;
+exhaustedRound.state.phase = "trial";
+exhaustedRound.state.activeCase = structuredClone(CASES[0]);
+exhaustedRound.state.selectedDefendantId = CASES[0].defendants[0].id;
+loadSnapshot(exhaustedRound);
+const beforeRound = currentSnapshot();
+try {
+  elements.get("active-case [data-action='next-round']").eventListeners.get("click")();
+} catch (error) {
+  failures.push(`An exhausted round transition must not throw: ${error.message}`);
+}
+expect(JSON.stringify(currentSnapshot().state) === JSON.stringify(beforeRound.state), "An exhausted round transition must preserve roles, round, hands and metrics.");
 
 if (failures.length) {
   console.error("App smoke tests failed.");

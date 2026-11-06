@@ -1,6 +1,6 @@
 import { ATTACK_CARDS, CASES, MOTION_CARDS } from "./data.js";
 
-export const APP_VERSION = "0.4.4";
+export const APP_VERSION = "0.4.5";
 export const CONTENT_VERSION = "2026-08-27.1";
 export const SOURCE_REVISION = "2026-08-27";
 export const SESSION_SCHEMA_VERSION = 2;
@@ -8,9 +8,17 @@ export const REPLAY_KIND = "civpro-classroom-replay";
 export const PLAYTEST_STATS_SCHEMA_VERSION = 2;
 export const MAX_STORED_ROUNDS = 200;
 export const VALID_JUDGE_TONES = Object.freeze(["neutral", "good", "bad"]);
+export const HAND_LIMITS = Object.freeze({ attacks: 6, motions: 8 });
 
 const VALID_PHASES = new Set(["claim", "defendant", "attack", "response", "discovery", "summary", "trial"]);
-const COMPATIBLE_APP_VERSIONS = new Set(["0.4.0", "0.4.1", "0.4.2", APP_VERSION]);
+const COMPATIBLE_APP_VERSIONS = new Set(["0.4.0", "0.4.1", "0.4.2", "0.4.3", "0.4.4", APP_VERSION]);
+const SESSION_STATE_KEYS = new Set([
+  "players", "round", "plaintiff", "defense", "phase", "decks", "hands", "discards", "resources",
+  "activeCase", "selectedDefendantId", "docket", "pendingAttack", "attackCount", "maxAttacks",
+  "sequence", "eventSequence", "settings", "tutorial", "judge", "scenarioPackId", "seed",
+  "rngState", "sessionStartedAt", "sessionComplete", "eventLog", "roundHistory",
+  "currentRoundMetrics", "lastAssessment", "pendingRoundOutcome", "learningCycle"
+]);
 
 export function normalizeSeed(value, fallback = "civpro-classroom") {
   const normalized = String(value ?? "").trim().slice(0, 80);
@@ -181,14 +189,25 @@ export function validateSessionSnapshot(snapshot, known = {}) {
   if (!savedState || typeof savedState !== "object") failures.push("Snapshot state is missing.");
 
   if (savedState) {
+    if (Object.keys(savedState).some((key) => !SESSION_STATE_KEYS.has(key))) {
+      failures.push("Snapshot contains unsupported state fields.");
+    }
     if (!VALID_PHASES.has(savedState.phase)) failures.push(`Unknown phase ${savedState.phase}.`);
     if (!Number.isInteger(savedState.round) || savedState.round < 1) failures.push("Round must be a positive integer.");
-    if (!Number.isInteger(savedState.sequence) || savedState.sequence < 1) failures.push("Card sequence must be a positive integer.");
+    if (!Number.isSafeInteger(savedState.sequence) || savedState.sequence < 1) failures.push("Card sequence must be a positive safe integer.");
     if (!Number.isInteger(savedState.rngState) || savedState.rngState < 0) failures.push("rngState must be a nonnegative integer.");
     if (!Array.isArray(savedState.settings?.activeTopics) || !savedState.settings.activeTopics.length) {
       failures.push("Active topics are missing.");
     }
     if (!Array.isArray(savedState.eventLog) || savedState.eventLog.length > 5000) failures.push("Event log is missing or too large.");
+    else {
+      if (!Number.isSafeInteger(savedState.eventSequence) || savedState.eventSequence !== savedState.eventLog.length + 1) {
+        failures.push("Event sequence must follow the complete event log.");
+      }
+      if (savedState.eventLog.some((entry, index) => entry?.id !== index + 1)) {
+        failures.push("Event log ids must be unique and sequential.");
+      }
+    }
     if (!Array.isArray(savedState.roundHistory) || savedState.roundHistory.length > MAX_STORED_ROUNDS) {
       failures.push("Round history is missing or too large.");
     }
@@ -200,8 +219,9 @@ export function validateSessionSnapshot(snapshot, known = {}) {
     }
     validateKnownId(savedState.scenarioPackId, known.scenarioPackIds, "scenario pack", failures, true);
     validateKnownId(savedState.activeCase?.id, known.caseIds, "active case", failures, true);
-    validateCardCollections(savedState, known, failures);
-    validateSafeIdentifiers(savedState, failures);
+    const cardsBounded = validateCardCollections(savedState, known, failures);
+    const caseBounded = cardsBounded && validateCaseCollections(savedState, failures);
+    if (cardsBounded && caseBounded) validateSafeIdentifiers(savedState, failures);
   }
 
   const serialized = JSON.stringify(snapshot || {});
@@ -310,8 +330,8 @@ export function aggregatePlaytestStats(stats, cardLabels = {}) {
     budgetFailures: { plaintiff: 0, defense: 0 },
     cardExchanges: { attacks: 0, motions: 0 }
   };
-  const cases = {};
-  const cards = {};
+  const cases = Object.create(null);
+  const cards = Object.create(null);
 
   for (const round of rounds) {
     totals.durationMs += Number(round.durationMs) || 0;
@@ -337,12 +357,14 @@ export function aggregatePlaytestStats(stats, cardLabels = {}) {
     }
 
     for (const [cardId, count] of Object.entries(round.cardsDrawn || {})) {
-      const card = cards[cardId] || { id: cardId, title: cardLabels[cardId] || cardId, drawn: 0, played: 0 };
+      const label = Object.hasOwn(cardLabels, cardId) && typeof cardLabels[cardId] === "string" ? cardLabels[cardId] : cardId;
+      const card = cards[cardId] || { id: cardId, title: label, drawn: 0, played: 0 };
       card.drawn += Number(count) || 0;
       cards[cardId] = card;
     }
     for (const [cardId, count] of Object.entries(round.cardsPlayed || {})) {
-      const card = cards[cardId] || { id: cardId, title: cardLabels[cardId] || cardId, drawn: 0, played: 0 };
+      const label = Object.hasOwn(cardLabels, cardId) && typeof cardLabels[cardId] === "string" ? cardLabels[cardId] : cardId;
+      const card = cards[cardId] || { id: cardId, title: label, drawn: 0, played: 0 };
       card.played += Number(count) || 0;
       cards[cardId] = card;
     }
@@ -378,24 +400,74 @@ export function plainClone(value) {
 }
 
 function validateCardCollections(savedState, known, failures) {
+  const attackCollectionLimit = ATTACK_CARDS.length + MAX_STORED_ROUNDS * HAND_LIMITS.attacks;
+  const motionCollectionLimit = MOTION_CARDS.length + MAX_STORED_ROUNDS * HAND_LIMITS.motions;
   const groups = [
-    [savedState.decks?.claims, known.caseIds, "claim deck"],
-    [savedState.hands?.claims, known.caseIds, "claim hand"],
-    [savedState.decks?.attacks, known.attackCardIds, "attack deck"],
-    [savedState.hands?.attacks, known.attackCardIds, "attack hand"],
-    [savedState.discards?.attacks, known.attackCardIds, "attack discards"],
-    [savedState.decks?.motions, known.motionCardIds, "motion deck"],
-    [savedState.hands?.motions, known.motionCardIds, "motion hand"],
-    [savedState.discards?.motions, known.motionCardIds, "motion discards"]
+    [savedState.decks?.claims, known.caseIds, "claim deck", CASES.length],
+    [savedState.hands?.claims, known.caseIds, "claim hand", CASES.length],
+    [savedState.decks?.attacks, known.attackCardIds, "attack deck", attackCollectionLimit],
+    [savedState.hands?.attacks, known.attackCardIds, "attack hand", HAND_LIMITS.attacks],
+    [savedState.discards?.attacks, known.attackCardIds, "attack discards", attackCollectionLimit],
+    [savedState.decks?.motions, known.motionCardIds, "motion deck", motionCollectionLimit],
+    [savedState.hands?.motions, known.motionCardIds, "motion hand", HAND_LIMITS.motions],
+    [savedState.discards?.motions, known.motionCardIds, "motion discards", motionCollectionLimit]
   ];
-  for (const [items, knownIds, label] of groups) {
+  let bounded = true;
+  for (const [items, knownIds, label, maximum] of groups) {
     if (!Array.isArray(items)) {
       failures.push(`${label} must be an array.`);
+      bounded = false;
+      continue;
+    }
+    if (items.length > maximum) {
+      failures.push(`${label} exceeds the ${maximum}-card limit.`);
+      bounded = false;
       continue;
     }
     for (const item of items) validateKnownId(item?.id, knownIds, label, failures);
   }
   validateKnownId(savedState.pendingAttack?.attack?.id, known.attackCardIds, "pending attack", failures, true);
+  return bounded;
+}
+
+function validateCaseCollections(savedState, failures) {
+  const cases = [
+    ...savedState.decks.claims.map((item) => [item, "claim deck"]),
+    ...savedState.hands.claims.map((item) => [item, "claim hand"]),
+    ...(savedState.activeCase ? [[savedState.activeCase, "active case"]] : [])
+  ];
+  let bounded = true;
+  for (const [claim, location] of cases) {
+    const canonicalCase = CASES.find((item) => item.id === claim?.id);
+    if (!canonicalCase) {
+      failures.push(`${location} case is not recognized.`);
+      bounded = false;
+      continue;
+    }
+    for (const field of ["defendants", "evidence"]) {
+      const items = claim[field];
+      const label = `${location} ${field}`;
+      if (!Array.isArray(items) || items.length > canonicalCase[field].length) {
+        failures.push(`${label} exceeds the known case limit.`);
+        bounded = false;
+        continue;
+      }
+      const knownIds = new Set(canonicalCase[field].map((item) => item.id));
+      const seen = new Set();
+      for (const item of items) {
+        if (!knownIds.has(item?.id)) {
+          failures.push(`${label} contains an unknown id.`);
+          bounded = false;
+        }
+        if (seen.has(item?.id)) {
+          failures.push(`${label} contains duplicate ids.`);
+          bounded = false;
+        }
+        seen.add(item?.id);
+      }
+    }
+  }
+  return bounded;
 }
 
 function validateKnownId(value, knownIds, label, failures, optional = false) {
@@ -417,15 +489,27 @@ function validateSafeIdentifiers(savedState, failures) {
     savedState.discards?.motions
   ]) {
     for (const item of collection || []) {
-      if (item.instanceId != null) identifiers.push(String(item.instanceId));
+      if (typeof item?.instanceId !== "string") failures.push("Card instance id is missing.");
+      else identifiers.push(item.instanceId);
     }
   }
+  const seen = new Set();
   for (const identifier of identifiers) {
-    if (!/^[a-z0-9-]+-\d+$/.test(identifier)) failures.push(`Unsafe card instance id ${identifier}.`);
+    if (seen.has(identifier)) failures.push(`Duplicate card instance id ${identifier}.`);
+    seen.add(identifier);
   }
-  for (const defendant of savedState.activeCase?.defendants || []) {
-    if (!/^[a-z0-9-]+$/.test(defendant.id || "")) failures.push(`Unsafe defendant id ${defendant.id || "<missing>"}.`);
+  let highestSequence = 0;
+  for (const identifier of new Set([
+    ...identifiers,
+    savedState.activeCase?.instanceId,
+    savedState.pendingAttack?.attack?.instanceId
+  ].filter((value) => value != null))) {
+    const match = typeof identifier === "string" && /^[a-z0-9-]+-(\d+)$/.exec(identifier);
+    const sequence = match ? Number(match[1]) : NaN;
+    if (!Number.isSafeInteger(sequence) || sequence < 1) failures.push(`Unsafe card instance id ${identifier}.`);
+    else highestSequence = Math.max(highestSequence, sequence);
   }
+  if (savedState.sequence <= highestSequence) failures.push("Card sequence must exceed existing card identifiers.");
 }
 
 function containsMarkup(value) {
