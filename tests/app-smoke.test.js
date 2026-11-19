@@ -118,7 +118,7 @@ elements.get("new-game-button")?.eventListeners.get("click")?.();
 expect(elements.get("claim-hand")?.innerHTML === firstClaimHand, "Starting again with the same seed should reproduce the claim hand.");
 
 elements.get("save-session-button")?.eventListeners.get("click")?.();
-expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"appVersion":"0.4.5"'), "Save should write a Version 0.4.5 local snapshot.");
+expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"appVersion":"0.4.6"'), "Save should write a Version 0.4.6 local snapshot.");
 expect(window.localStorage.getItem("civpro.v0.4.saved-session")?.includes('"contentVersion":"2026-08-27.1"'), "Save should identify the content version.");
 elements.get("seed-input").value = "changed-seed";
 elements.get("new-game-button")?.eventListeners.get("click")?.();

@@ -40,7 +40,7 @@ jobs:
 
       - name: Verify toolchain
         run: |
-          test "$(node --version)" = "v26.13.0"
+          test "$(node --version)" = "v26.13.1"
           test "$(npm --version)" = "12.2.2"
 
       - name: Install locked dependencies

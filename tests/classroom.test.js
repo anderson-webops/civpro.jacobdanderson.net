@@ -153,6 +153,7 @@ expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.1" }, known), "Th
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.2" }, known), "The patch release should retain 0.4.2 replay compatibility.");
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.3" }, known), "The patch release should retain 0.4.3 draft replay compatibility.");
 expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.4" }, known), "The patch release should retain 0.4.4 replay compatibility.");
+expect(validateSessionSnapshot({ ...snapshot, appVersion: "0.4.5" }, known), "The patch release should retain 0.4.5 replay compatibility.");
 
 const injectedStats = clone(snapshot);
 injectedStats.state.playtestStats = { rounds: [{ caseId: "__proto__" }] };

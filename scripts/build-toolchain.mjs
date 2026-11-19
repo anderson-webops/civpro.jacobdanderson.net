@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { chmodSync, constants, copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { sha256, toolchainMetadata, toolchainSource, verifyBuildToolchain } from './build-toolchain-state.mjs'
@@ -107,8 +107,21 @@ try {
   const nodeName = process.platform === 'win32'
     ? 'node.exe'
     : 'node'
-  copyFileSync(process.execPath, path.join(bin, nodeName), constants.COPYFILE_EXCL)
+  const copyRuntimeFlags = constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE
+  copyFileSync(process.execPath, path.join(bin, nodeName), copyRuntimeFlags)
   chmodSync(path.join(bin, nodeName), 0o755)
+  if (process.platform === 'darwin') {
+    const libraryName = `libnode.${process.versions.modules}.dylib`
+    const source = path.resolve(path.dirname(realpathSync(process.execPath)), '../lib', libraryName)
+    if (existsSync(source)) {
+      const libraryDirectory = path.join(prefix, 'lib')
+      const destination = path.join(libraryDirectory, libraryName)
+      const expected = sha256(readFileSync(source))
+      mkdirSync(libraryDirectory, { mode: 0o700 })
+      copyFileSync(source, destination, copyRuntimeFlags)
+      assert.equal(sha256(readFileSync(destination)), expected)
+    }
+  }
   const npmCli = path.join(prefix, 'node_modules/npm/bin/npm-cli.js')
   if (process.platform === 'win32') {
     for (const [name, filename] of [
